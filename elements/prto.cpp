@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 /*these are the count values of where the particle gets stored, depending on where it came from
    0 1 2
    7 . 3

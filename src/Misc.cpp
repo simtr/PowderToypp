@@ -4,7 +4,7 @@
 #include <regex.h>
 #include <sys/types.h>
 #include <math.h>
-#include "misc.h"
+#include "Misc.h"
 #include "Config.h"
 //#include "interface.h"
 //#include "graphics.h"
@@ -47,7 +47,7 @@ char *exe_name(void)
 	}
 	res = 1;
 #else
-	char fn[64], *name=malloc(64);
+	char fn[64], * name = (char*)malloc(64);
 	size_t max=64, res;
 	sprintf(fn, "/proc/self/exe");
 	memset(name, 0, max);

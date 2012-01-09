@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_ICEI(UPDATE_FUNC_ARGS) { //currently used for snow as well
 	int r, rx, ry;

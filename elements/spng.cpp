@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_SPNG(UPDATE_FUNC_ARGS) {
 	int r, trade, rx, ry, tmp, np;

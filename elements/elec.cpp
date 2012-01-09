@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_ELEC(UPDATE_FUNC_ARGS) {
 	int r, rt, rx, ry, nb, rrx, rry;

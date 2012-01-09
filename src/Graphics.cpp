@@ -19,8 +19,8 @@
 #endif
 
 #include "Config.h"
-#include "air.h"
-#include "gravity.h"
+#include "Air.h"
+#include "Gravity.h"
 //#include "powder.h"
 #define INCLUDE_PSTRUCT
 #include "Simulation.h"
@@ -28,7 +28,7 @@
 #include "ElementGraphics.h"
 #define INCLUDE_FONTDATA
 #include "font.h"
-#include "misc.h"
+#include "Misc.h"
 #include "hmap.h"
 
 //unsigned cmode = CM_FIRE;

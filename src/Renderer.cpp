@@ -1670,11 +1670,10 @@ void Renderer::init_display_modes()
 	}
 }
 
-Renderer::Renderer(Graphics * g, Simulation * sim)
+Renderer::Renderer(Graphics * g, Simulation * sim) :
+  g   ( g ),
+  sim ( sim )
 {
-	this->g = g;
-	this->sim = sim;
-
 	prepare_alpha(CELL, 1.0f);
 	init_display_modes();
 	prepare_graphicscache();

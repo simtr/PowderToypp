@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_SPRK(UPDATE_FUNC_ARGS) {
 	int r, rx, ry, rt, conduct_sprk, nearp, pavg, ct = parts[i].ctype;
