@@ -14,7 +14,8 @@
 namespace ui {
 
 Sandbox::Sandbox():
-		Component(0, 0, XRES, YRES)
+		Component(0, 0, XRES, YRES),
+		ren ( 0 )
 {
 	sim = new Simulation();
 }

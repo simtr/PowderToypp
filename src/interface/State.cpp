@@ -19,7 +19,8 @@ State::State(int w, int h) :
     mouseXP(0),
     mouseYP(0),
     width(w),
-    height(h)
+    height(h),
+    Components  ()
 {
 }
 
@@ -61,7 +62,7 @@ void State::Draw(void* userdata)
                 Components[i]->X < width &&
                 Components[i]->Y < height )
             {
-                Components[i]->Draw(userdata);
+              Components[i]->Draw(userdata);
             }
         }
     }
