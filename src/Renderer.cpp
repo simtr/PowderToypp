@@ -486,6 +486,7 @@ void Renderer::prepare_alpha(int size, float intensity)
 
 void Renderer::render_parts()
 {
+  //return;
 	int deca, decr, decg, decb, cola, colr, colg, colb, firea, firer, fireg, fireb, pixel_mode, q, i, t, nx, ny, x, y, caddress;
 	int orbd[4] = {0, 0, 0, 0}, orbl[4] = {0, 0, 0, 0};
 	float gradv, flicker, fnx, fny;
@@ -1670,11 +1671,10 @@ void Renderer::init_display_modes()
 	}
 }
 
-Renderer::Renderer(Graphics * g, Simulation * sim)
+Renderer::Renderer(Graphics * g, Simulation * sim) :
+  g   ( g ),
+  sim ( sim )
 {
-	this->g = g;
-	this->sim = sim;
-
 	prepare_alpha(CELL, 1.0f);
 	init_display_modes();
 	prepare_graphicscache();
