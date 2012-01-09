@@ -15,9 +15,11 @@ UI_SOURCES := $(wildcard src/interface/*.cpp)
 UI_OBJS := $(patsubst src/interface/%.cpp,build/obj/ui/%.o,$(UI_SOURCES))
 UI_PREREQ := $(patsubst build/obj/ui/%.o,build/obj/ui/%.powder.exe.o,$(UI_OBJS))
 
-CFLAGS := -Iincludes/ -Idata/ -DWIN32
+CFLAGS := -Iincludes/ -Idata/
+CLFAGS_WIN := ${CFLAGS} -DWIN32
 OFLAGS := -O3 -ffast-math -ftree-vectorize -funsafe-math-optimizations -fkeep-inline-functions
-LFLAGS := -lmingw32 -lregex -lws2_32 -lSDLmain -lpthread -lSDL -lm -lbz2 # -mwindows
+LFLAGS := -lSDL -lbz2 -lpthread
+LFLAGS_WIN := ${LFLAGS} -lmingw32 -lws2_32 -lSDLmain -lm
 
 CFLAGS += $(OFLAGS)
 
@@ -25,8 +27,10 @@ CPPC := g++
 CPPC_WIN := i686-w64-mingw32-gcc
 WIN_RES := i686-w64-mingw32-windres
 
+build/powder: $(EL_PREREQ) $(CORE_PREREQ) $(UI_PREREQ)
+	$(CPPC) $(CFLAGS) $(LDFLAGS) $(EXTRA_OBJS) $(EL_PREREQ) $(CORE_PREREQ) $(UI_PREREQ) $(LFLAGS) -o$@ -g
 build/powder.exe: $(EL_PREREQ) $(CORE_PREREQ) $(UI_PREREQ)
-	$(CPPC) $(CFLAGS) $(LDFLAGS) $(EXTRA_OBJS) $(EL_PREREQ) $(CORE_PREREQ) $(UI_PREREQ) $(LFLAGS) -o $@ -ggdb
+	$(CPPC) $(CFLAGS_WIN) $(LDFLAGS) $(EXTRA_OBJS) $(EL_PREREQ) $(CORE_PREREQ) $(UI_PREREQ) $(LFLAGS_WIN) -o $@ -ggdb
 build/obj/ui/%.powder.exe.o: src/interface/%.cpp $(HEADERS)
 	$(CPPC) -c $(CFLAGS) -o $@ $< -ggdb
 build/obj/elements/%.powder.exe.o: elements/%.cpp $(HEADERS)
