@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 #define LIGHTING_POWER 0.65
 

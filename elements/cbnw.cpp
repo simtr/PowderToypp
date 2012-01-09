@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_CBNW(UPDATE_FUNC_ARGS) {
 	int r, rx, ry, oldt;

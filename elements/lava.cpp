@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int graphics_LAVA(GRAPHICS_FUNC_ARGS)
 {

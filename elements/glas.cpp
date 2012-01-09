@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_GLAS(UPDATE_FUNC_ARGS) {
 	parts[i].pavg[0] = parts[i].pavg[1];

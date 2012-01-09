@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_CLNE(UPDATE_FUNC_ARGS) {
 	if (parts[i].ctype<=0 || parts[i].ctype>=PT_NUM || (parts[i].ctype==PT_LIFE && (parts[i].tmp<0 || parts[i].tmp>=NGOLALT)))

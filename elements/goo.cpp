@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_GOO(UPDATE_FUNC_ARGS) {
 	if (!parts[i].life && sim->pv[y/CELL][x/CELL]>1.0f)

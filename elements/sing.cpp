@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_SING(UPDATE_FUNC_ARGS) {
 	int r, rx, ry, cry, crx, rad, nxi, nxj, nb, j, spawncount;

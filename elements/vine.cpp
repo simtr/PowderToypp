@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_VINE(UPDATE_FUNC_ARGS) {
 	int r, np, rx =(rand()%3)-1, ry=(rand()%3)-1;

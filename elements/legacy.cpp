@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 // Interactions which only occur when legacy_enable is on
 int update_legacy_all(UPDATE_FUNC_ARGS) {

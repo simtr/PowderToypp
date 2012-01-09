@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int graphics_FIRE(GRAPHICS_FUNC_ARGS)
 {

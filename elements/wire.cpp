@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
  
 int update_WIRE(UPDATE_FUNC_ARGS) {
     int s,r,rx,ry,count;    

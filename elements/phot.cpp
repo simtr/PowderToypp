@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 
 int update_PHOT(UPDATE_FUNC_ARGS) {
 	int r, rt, rx, ry;

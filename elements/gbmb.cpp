@@ -1,4 +1,4 @@
-#include "element.h"
+#include "Element.h"
 int update_GBMB(UPDATE_FUNC_ARGS) {
 	int rx,ry,r;
 	if (parts[i].life<=0)
