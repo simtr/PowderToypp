@@ -11,12 +11,16 @@
 #include "login/LoginController.h"
 #include "ssave/SSaveController.h"
 #include "console/ConsoleController.h"
+//#include "cat/TPTScriptInterface.h"
+#include "cat/LuaScriptInterface.h"
 #include "Menu.h"
 
 using namespace std;
 
 class GameModel;
 class GameView;
+class CommandInterface;
+class ConsoleController;
 class GameController
 {
 private:
@@ -28,6 +32,7 @@ private:
 	LoginController * loginWindow;
 	SSaveController * ssave;
 	ConsoleController * console;
+	CommandInterface * commandInterface;
 public:
 	class LoginCallback;
 	class SearchCallback;

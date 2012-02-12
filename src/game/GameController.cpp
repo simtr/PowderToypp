@@ -70,13 +70,17 @@ GameController::GameController():
 		search(NULL),
 		renderOptions(NULL),
 		loginWindow(NULL),
-		ssave(NULL)
+		ssave(NULL),
+		console(NULL)
 {
 	gameView = new GameView();
 	gameModel = new GameModel();
 
 	gameView->AttachController(this);
 	gameModel->AddObserver(gameView);
+
+	commandInterface = new LuaScriptInterface(gameModel);//new TPTScriptInterface();
+	//commandInterface->AttachGameModel(gameModel);
 
 	//sim = new Simulation();
 }
@@ -312,7 +316,8 @@ void GameController::OpenDisplayOptions()
 
 void GameController::ShowConsole()
 {
-	console = new ConsoleController(NULL);
+	if(!console)
+		console = new ConsoleController(NULL, commandInterface);
 	ui::Engine::Ref().ShowWindow(console->GetView());
 }
 
@@ -326,21 +331,28 @@ void GameController::OpenSaveWindow()
 {
 	if(gameModel->GetUser().ID)
 	{
-		if(gameModel->GetSave())
+		int tempSaveLength;
+		unsigned char * tempData = gameModel->GetSimulation()->Save(tempSaveLength);
+		if(!tempData)
 		{
-			Save tempSave(*gameModel->GetSave());
-			int tempSaveLength;
-			tempSave.SetData(gameModel->GetSimulation()->Save(tempSaveLength));
-			ssave = new SSaveController(new SSaveCallback(this), tempSave);
+			new ErrorMessage("Error", "Unable to build save.");
 		}
 		else
 		{
-			Save tempSave(0, 0, 0, 0, gameModel->GetUser().Username, "");
-			int tempSaveLength;
-			tempSave.SetData(gameModel->GetSimulation()->Save(tempSaveLength));
-			ssave = new SSaveController(new SSaveCallback(this), tempSave);
+			if(gameModel->GetSave())
+			{
+				Save tempSave(*gameModel->GetSave());
+				tempSave.SetData(tempData, tempSaveLength);
+				ssave = new SSaveController(new SSaveCallback(this), tempSave);
+			}
+			else
+			{
+				Save tempSave(0, 0, 0, 0, gameModel->GetUser().Username, "");
+				tempSave.SetData(tempData, tempSaveLength);
+				ssave = new SSaveController(new SSaveCallback(this), tempSave);
+			}
+			ui::Engine::Ref().ShowWindow(ssave->GetView());
 		}
-		ui::Engine::Ref().ShowWindow(ssave->GetView());
 	}
 	else
 	{

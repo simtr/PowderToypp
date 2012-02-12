@@ -235,6 +235,7 @@ unsigned char * Client::GetSaveData(int saveID, int saveDate, int & dataLength)
 	{
 		urlStream << "http://" << STATICSERVER << "/" << saveID << ".cps";
 	}
+	std::cout << urlStream.str() << std::endl;
 	data = (unsigned char *)http_simple_get((char *)urlStream.str().c_str(), &dataStatus, &dataLength);
 	if(data && dataStatus == 200)
 	{
@@ -420,6 +421,52 @@ Thumbnail * Client::GetPreview(int saveID, int saveDate)
 		}
 		return new Thumbnail(saveID, saveDate, (pixel *)malloc((128*128) * PIXELSIZE), ui::Point(128, 128));
 	}
+}
+
+std::vector<Comment*> * Client::GetComments(int saveID, int start, int count)
+{
+	lastError = "";
+	std::vector<Comment*> * commentArray = new std::vector<Comment*>();
+
+	std::stringstream urlStream;
+	char * data;
+	int dataStatus, dataLength;
+	urlStream << "http://" << SERVER << "/Browse/View.json?ID=" << saveID << "&Mode=Comments&Start=" << start << "&Count=" << count;
+	data = http_simple_get((char *)urlStream.str().c_str(), &dataStatus, &dataLength);
+	if(dataStatus == 200 && data)
+	{
+		try
+		{
+			std::istringstream dataStream(data);
+			json::Array commentsArray;
+			json::Reader::Read(commentsArray, dataStream);
+
+			for(int j = 0; j < commentsArray.Size(); j++)
+			{
+				json::Number tempUserID = commentsArray[j]["UserID"];
+				json::String tempUsername = commentsArray[j]["Username"];
+				json::String tempComment = commentsArray[j]["Text"];
+				commentArray->push_back(
+							new Comment(
+								tempUserID.Value(),
+								tempUsername.Value(),
+								tempComment.Value()
+								)
+							);
+			}
+		}
+		catch (json::Exception &e)
+		{
+			lastError = "Could not read response";
+		}
+	}
+	else
+	{
+		lastError = http_ret_text(dataStatus);
+	}
+	if(data)
+		free(data);
+	return commentArray;
 }
 
 std::vector<Save*> * Client::SearchSaves(int start, int count, string query, string sort, int & resultCount)
