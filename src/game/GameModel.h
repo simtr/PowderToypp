@@ -2,8 +2,10 @@
 #define GAMEMODEL_H
 
 #include <vector>
+#include <deque>
 #include "search/Save.h"
 #include "simulation/Simulation.h"
+#include "interface/Colour.h"
 #include "Renderer.h"
 #include "GameView.h"
 #include "Brush.h"
@@ -30,6 +32,11 @@ public:
 class GameModel
 {
 private:
+	//int clipboardSize;
+	//unsigned char * clipboardData;
+	Save * stamp;
+	Save * clipboard;
+	deque<string> consoleLog;
 	vector<GameView*> observers;
 	vector<Tool*> toolList;
 	vector<Menu*> menuList;
@@ -41,10 +48,13 @@ private:
 	Renderer * ren;
 	Tool * activeTools[3];
 	User currentUser;
+	bool colourSelector;
+	ui::Colour colour;
 	//bool zoomEnabled;
 	void notifyRendererChanged();
 	void notifySimulationChanged();
 	void notifyPausedChanged();
+	void notifyDecorationChanged();
 	void notifySaveChanged();
 	void notifyBrushChanged();
 	void notifyMenuListChanged();
@@ -52,9 +62,20 @@ private:
 	void notifyActiveToolsChanged();
 	void notifyUserChanged();
 	void notifyZoomChanged();
+	void notifyClipboardChanged();
+	void notifyStampChanged();
+	void notifyColourSelectorColourChanged();
+	void notifyColourSelectorVisibilityChanged();
+	void notifyLogChanged(string entry);
 public:
 	GameModel();
 	~GameModel();
+
+	void SetColourSelectorVisibility(bool visibility);
+	bool GetColourSelectorVisibility();
+
+	void SetColourSelectorColour(ui::Colour colour);
+	ui::Colour GetColourSelectorColour();
 
 	void SetVote(int direction);
 	Save * GetSave();
@@ -65,6 +86,8 @@ public:
 	void SetActiveTool(int selection, Tool * tool);
 	bool GetPaused();
 	void SetPaused(bool pauseState);
+	bool GetDecoration();
+	void SetDecoration(bool decorationState);
 	void ClearSimulation();
 	vector<Menu*> GetMenuList();
 	vector<Tool*> GetToolList();
@@ -87,6 +110,13 @@ public:
 	ui::Point GetZoomPosition();
 	void SetZoomWindowPosition(ui::Point position);
 	ui::Point GetZoomWindowPosition();
+	void SetStamp(Save * newStamp);
+	void AddStamp(unsigned char * saveData, int saveSize);
+	void SetClipboard(unsigned char * saveData, int saveSize);
+	void Log(string message);
+	deque<string> GetLog();
+	Save * GetClipboard();
+	Save * GetStamp();
 };
 
 #endif // GAMEMODEL_H

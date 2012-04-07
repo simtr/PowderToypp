@@ -3,7 +3,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <iomanip>
 #include <time.h>
+
+#ifdef WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #include "Config.h"
 #include "Client.h"
@@ -76,6 +84,21 @@ Client::Client():
 	{
 		http_init(NULL);
 	}
+
+	//Read stamps library
+	std::ifstream stampsLib;
+	stampsLib.open(STAMPS_DIR PATH_SEP "stamps.def", ios::binary);
+	while(true)
+	{
+		char data[11];
+		memset(data, 0, 11);
+		if(stampsLib.readsome(data, 10)!=10)
+			break;
+		if(!data[0])
+			break;
+		stampIDs.push_back(data);
+	}
+	stampsLib.close();
 }
 
 Client::~Client()
@@ -167,6 +190,95 @@ RequestStatus Client::UploadSave(Save * save)
 		free(data);
 	}
 	return RequestFailure;
+}
+
+Save * Client::GetStamp(string stampID)
+{
+	std::ifstream stampFile;
+	stampFile.open(string(STAMPS_DIR PATH_SEP + stampID + ".stm").c_str(), ios::binary);
+	if(stampFile.is_open())
+	{
+		stampFile.seekg(0, ios::end);
+		size_t fileSize = stampFile.tellg();
+		stampFile.seekg(0);
+
+		unsigned char * tempData = (unsigned char *)malloc(fileSize);
+		stampFile.read((char *)tempData, fileSize);
+		stampFile.close();
+
+
+		Save * tempSave = new Save(0, 0, 0, 0, "", "");
+		tempSave->SetData(tempData, fileSize);
+		return tempSave;
+	}
+	else
+	{
+		return NULL;
+	}
+}
+
+void Client::DeleteStamp(string stampID)
+{
+	return;
+}
+
+string Client::AddStamp(Save * saveData)
+{
+	unsigned t=(unsigned)time(NULL);
+	if (lastStampTime!=t)
+	{
+		lastStampTime=t;
+		lastStampName=0;
+	}
+	else
+		lastStampName++;
+	std::stringstream saveID;
+	//sprintf(saveID, "%08x%02x", lastStampTime, lastStampName);
+	saveID
+	<< std::setw(8) << std::setfill('0') << std::hex << lastStampTime
+	<< std::setw(2) << std::setfill('0') << std::hex << lastStampName;
+
+#ifdef WIN32
+	_mkdir(STAMPS_DIR);
+#else
+	mkdir(STAMPS_DIR, 0755);
+#endif
+
+	std::ofstream stampStream;
+	stampStream.open(string(STAMPS_DIR PATH_SEP + saveID.str()+".stm").c_str(), ios::binary);
+	stampStream.write((const char *)saveData->data, saveData->dataLength);
+	stampStream.close();
+
+	stampIDs.push_back(saveID.str());
+
+	updateStamps();
+
+	return saveID.str();
+}
+
+void Client::updateStamps()
+{
+
+#ifdef WIN32
+	_mkdir(STAMPS_DIR);
+#else
+	mkdir(STAMPS_DIR, 0755);
+#endif
+
+	std::ofstream stampsStream;
+	stampsStream.open(string(STAMPS_DIR PATH_SEP "stamps.def").c_str(), ios::binary);
+	for(int i = 0; i < stampIDs.size(); i++)
+	{
+		stampsStream.write(stampIDs[i].c_str(), 10);
+	}
+	stampsStream.write("\0", 1);
+	stampsStream.close();
+	return;
+}
+
+vector<string> Client::GetStamps()
+{
+	return stampIDs;
 }
 
 RequestStatus Client::ExecVote(int saveID, int direction)
@@ -320,6 +432,58 @@ LoginStatus Client::Login(string username, string password, User & user)
 	return LoginError;
 }
 
+RequestStatus Client::DeleteSave(int saveID)
+{
+	lastError = "";
+	std::vector<string> * tags = NULL;
+	std::stringstream urlStream;
+	char * data = NULL;
+	int dataStatus, dataLength;
+	urlStream << "http://" << SERVER << "/Browse/Delete.json?ID=" << saveID;
+	if(authUser.ID)
+	{
+		std::stringstream userIDStream;
+		userIDStream << authUser.ID;
+		data = http_auth_get((char *)urlStream.str().c_str(), (char *)(userIDStream.str().c_str()), NULL, (char *)(authUser.SessionID.c_str()), &dataStatus, &dataLength);
+	}
+	else
+	{
+		lastError = "Not authenticated";
+		return RequestFailure;
+	}
+	if(dataStatus == 200 && data)
+	{
+		try
+		{
+			std::istringstream dataStream(data);
+			json::Object objDocument;
+			json::Reader::Read(objDocument, dataStream);
+
+			int status = ((json::Number)objDocument["Status"]).Value();
+
+			if(status!=1)
+				goto failure;
+		}
+		catch (json::Exception &e)
+		{
+			lastError = "Could not read response";
+			goto failure;
+		}
+	}
+	else
+	{
+		lastError = http_ret_text(dataStatus);
+		goto failure;
+	}
+	if(data)
+		free(data);
+	return RequestOkay;
+failure:
+	if(data)
+		free(data);
+	return RequestFailure;
+}
+
 Save * Client::GetSave(int saveID, int saveDate)
 {
 	lastError = "";
@@ -359,6 +523,16 @@ Save * Client::GetSave(int saveID, int saveDate)
 			json::String tempDescription = objDocument["Description"];
 			json::Number tempDate = objDocument["Date"];
 			json::Boolean tempPublished = objDocument["Published"];
+
+			json::Array tagsArray = objDocument["Tags"];
+			vector<string> tempTags;
+
+			for(int j = 0; j < tagsArray.Size(); j++)
+			{
+				json::String tempTag = tagsArray[j];
+				tempTags.push_back(tempTag.Value());
+			}
+
 			return new Save(
 					tempID.Value(),
 					tempDate.Value(),
@@ -368,7 +542,8 @@ Save * Client::GetSave(int saveID, int saveDate)
 					tempUsername.Value(),
 					tempName.Value(),
 					tempDescription.Value(),
-					tempPublished.Value()
+					tempPublished.Value(),
+					tempTags
 					);
 		}
 		catch (json::Exception &e)
@@ -407,10 +582,13 @@ Thumbnail * Client::GetPreview(int saveID, int saveDate)
 		if(thumbData)
 		{
 			return new Thumbnail(saveID, saveDate, thumbData, ui::Point(imgw, imgh));
+			free(thumbData);
 		}
 		else
 		{
-			return new Thumbnail(saveID, saveDate, (pixel *)malloc((128*128) * PIXELSIZE), ui::Point(128, 128));
+			thumbData = (pixel *)malloc((128*128) * PIXELSIZE);
+			return new Thumbnail(saveID, saveDate, thumbData, ui::Point(128, 128));
+			free(thumbData);
 		}
 	}
 	else
@@ -469,7 +647,7 @@ std::vector<Comment*> * Client::GetComments(int saveID, int start, int count)
 	return commentArray;
 }
 
-std::vector<Save*> * Client::SearchSaves(int start, int count, string query, string sort, int & resultCount)
+std::vector<Save*> * Client::SearchSaves(int start, int count, string query, string sort, bool showOwn, int & resultCount)
 {
 	lastError = "";
 	resultCount = 0;
@@ -488,6 +666,12 @@ std::vector<Save*> * Client::SearchSaves(int start, int count, string query, str
 			if(query.length())
 				urlStream << URLEscape(" ");
 			urlStream << URLEscape("sort:") << URLEscape(sort);
+		}
+		if(showOwn && authUser.ID)
+		{
+			if(query.length())
+				urlStream << URLEscape(" ");
+			urlStream << URLEscape("user:") << URLEscape(authUser.Username);
 		}
 
 	}
@@ -618,10 +802,13 @@ Thumbnail * Client::GetThumbnail(int saveID, int saveDate)
 					if(thumbData)
 					{
 						thumbnailCache[thumbnailCacheNextID] = new Thumbnail(saveID, saveDate, thumbData, ui::Point(imgw, imgh));
+						free(thumbData);
 					}
 					else
 					{
-						thumbnailCache[thumbnailCacheNextID] = new Thumbnail(saveID, saveDate, (pixel *)malloc((128*128) * PIXELSIZE), ui::Point(128, 128));
+						thumbData = (pixel *)malloc((128*128) * PIXELSIZE);
+						thumbnailCache[thumbnailCacheNextID] = new Thumbnail(saveID, saveDate, thumbData, ui::Point(128, 128));
+						free(thumbData);
 					}
 					return thumbnailCache[thumbnailCacheNextID++];
 				}
@@ -636,7 +823,9 @@ Thumbnail * Client::GetThumbnail(int saveID, int saveDate)
 					{
 						delete thumbnailCache[thumbnailCacheNextID];
 					}
-					thumbnailCache[thumbnailCacheNextID] = new Thumbnail(saveID, saveDate, (pixel *)malloc((128*128) * PIXELSIZE), ui::Point(128, 128));
+					thumbData = (pixel *)malloc((128*128) * PIXELSIZE);
+					thumbnailCache[thumbnailCacheNextID] = new Thumbnail(saveID, saveDate, thumbData, ui::Point(128, 128));
+					free(thumbData);
 					return thumbnailCache[thumbnailCacheNextID++];
 				}
 			}
@@ -658,4 +847,102 @@ Thumbnail * Client::GetThumbnail(int saveID, int saveDate)
 	}
 	//http_async_req_start(http, urlStream.str().c_str(), NULL, 0, 1);
 	return NULL;
+}
+
+std::vector<string> * Client::RemoveTag(int saveID, string tag)
+{
+	lastError = "";
+	std::vector<string> * tags = NULL;
+	std::stringstream urlStream;
+	char * data = NULL;
+	int dataStatus, dataLength;
+	urlStream << "http://" << SERVER << "/Browse/EditTag.json?Op=delete&ID=" << saveID << "&Tag=" << tag;
+	if(authUser.ID)
+	{
+		std::stringstream userIDStream;
+		userIDStream << authUser.ID;
+		data = http_auth_get((char *)urlStream.str().c_str(), (char *)(userIDStream.str().c_str()), NULL, (char *)(authUser.SessionID.c_str()), &dataStatus, &dataLength);
+	}
+	else
+	{
+		lastError = "Not authenticated";
+		return NULL;
+	}
+	if(dataStatus == 200 && data)
+	{
+		try
+		{
+			std::istringstream dataStream(data);
+			json::Array tagsArray;
+			json::Reader::Read(tagsArray, dataStream);
+
+			tags = new std::vector<string>();
+
+			for(int j = 0; j < tagsArray.Size(); j++)
+			{
+				json::String tempTag = tagsArray[j];
+				tags->push_back(tempTag.Value());
+			}
+		}
+		catch (json::Exception &e)
+		{
+			lastError = "Could not read response";
+		}
+	}
+	else
+	{
+		lastError = http_ret_text(dataStatus);
+	}
+	if(data)
+		free(data);
+	return tags;
+}
+
+std::vector<string> * Client::AddTag(int saveID, string tag)
+{
+	lastError = "";
+	std::vector<string> * tags = NULL;
+	std::stringstream urlStream;
+	char * data = NULL;
+	int dataStatus, dataLength;
+	urlStream << "http://" << SERVER << "/Browse/EditTag.json?Op=add&ID=" << saveID << "&Tag=" << tag;
+	if(authUser.ID)
+	{
+		std::stringstream userIDStream;
+		userIDStream << authUser.ID;
+		data = http_auth_get((char *)urlStream.str().c_str(), (char *)(userIDStream.str().c_str()), NULL, (char *)(authUser.SessionID.c_str()), &dataStatus, &dataLength);
+	}
+	else
+	{
+		lastError = "Not authenticated";
+		return NULL;
+	}
+	if(dataStatus == 200 && data)
+	{
+		try
+		{
+			std::istringstream dataStream(data);
+			json::Array tagsArray;
+			json::Reader::Read(tagsArray, dataStream);
+
+			tags = new std::vector<string>();
+
+			for(int j = 0; j < tagsArray.Size(); j++)
+			{
+				json::String tempTag = tagsArray[j];
+				tags->push_back(tempTag.Value());
+			}
+		}
+		catch (json::Exception &e)
+		{
+			lastError = "Could not read response";
+		}
+	}
+	else
+	{
+		lastError = http_ret_text(dataStatus);
+	}
+	if(data)
+		free(data);
+	return tags;
 }

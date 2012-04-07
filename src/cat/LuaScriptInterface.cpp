@@ -13,7 +13,8 @@
 #include "LuaScriptHelper.h"
 
 LuaScriptInterface::LuaScriptInterface(GameModel * m):
-	CommandInterface(m)
+	CommandInterface(m),
+	currentCommand(false)
 {
 	int i = 0, j;
 	char tmpname[12];
@@ -77,12 +78,22 @@ LuaScriptInterface::LuaScriptInterface(GameModel * m):
 		{NULL,NULL}
 	};
 
+	luacon_currentCommand = &currentCommand;
+	luacon_lastError = &lastError;
+
 	luacon_model = m;
 	luacon_sim = m->GetSimulation();
 	luacon_g = ui::Engine::Ref().g;
+	luacon_ci = this;
 
 	l = lua_open();
 	luaL_openlibs(l);
+
+	//Replace print function with our screen logging thingy
+	lua_pushcfunction(l, luatpt_log);
+	lua_setglobal(l, "print");
+
+	//Register all tpt functions
 	luaL_register(l, "tpt", tptluaapi);
 
 	tptProperties = lua_gettop(l);
@@ -201,17 +212,77 @@ tpt.partsdata = nil");
 	{
 		lua_el_mode[i] = 0;
 	}
+
 }
 
-void LuaScriptInterface::Tick()
+bool LuaScriptInterface::OnMouseMove(int x, int y, int dx, int dy)
 {
+	luacon_mousex = x;
+	luacon_mousey = y;
+	return true;
+}
 
+bool LuaScriptInterface::OnMouseDown(int x, int y, unsigned button)
+{
+	luacon_mousedown = true;
+	luacon_mousebutton = button;
+	return luacon_mouseevent(x, y, button, LUACON_MDOWN);
+}
+
+bool LuaScriptInterface::OnMouseUp(int x, int y, unsigned button)
+{
+	luacon_mousedown = false;
+	return luacon_mouseevent(x, y, button, LUACON_MUP);
+}
+
+bool LuaScriptInterface::OnMouseWheel(int x, int y, int d)
+{
+	return true;
+}
+
+bool LuaScriptInterface::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
+{
+	int modifiers;
+	if(shift)
+		modifiers |= 0x001;
+	if(ctrl)
+		modifiers |= 0x040;
+	if(alt)
+		modifiers |= 0x100;
+	return luacon_keyevent(key, modifiers, LUACON_KDOWN);
+}
+
+bool LuaScriptInterface::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt)
+{
+	int modifiers;
+	if(shift)
+		modifiers |= 0x001;
+	if(ctrl)
+		modifiers |= 0x040;
+	if(alt)
+		modifiers |= 0x100;
+	return luacon_keyevent(key, modifiers, LUACON_KUP);
+}
+
+void LuaScriptInterface::OnTick()
+{
+	if(luacon_mousedown)
+		luacon_mouseevent(luacon_mousex, luacon_mousey, luacon_mousebutton, LUACON_MPRESS);
+	luacon_step(luacon_mousex, luacon_mousey, luacon_selectedl, luacon_selectedr);
 }
 
 int LuaScriptInterface::Command(std::string command)
 {
-	luaL_dostring(l, command.c_str());
-	return 0;
+	int ret;
+	lastError = "";
+	currentCommand = true;
+	if((ret = luaL_dostring(l, command.c_str())))
+	{
+		lastError = luacon_geterror();
+		//Log(LogError, lastError);
+	}
+	currentCommand = false;
+	return ret;
 }
 
 std::string LuaScriptInterface::FormatCommand(std::string command)
@@ -745,7 +816,7 @@ int luacon_step(int mx, int my, int selectl, int selectr){
 				if (callret)
 				{
 					// failed, TODO: better error reporting
-					printf("%s\n",luacon_geterror());
+					luacon_ci->Log(CommandInterface::LogError, luacon_geterror());//("%s\n",luacon_geterror());
 				}
 			}
 		}
@@ -839,6 +910,7 @@ int luatpt_error(lua_State* l)
 	free(error);
 	return luaL_error(l, "Screen buffer does not exist");*/
 	//TODO IMPLEMENT
+	return 0;
 }
 int luatpt_drawtext(lua_State* l)
 {
@@ -925,12 +997,11 @@ int luatpt_setconsole(lua_State* l)
 
 int luatpt_log(lua_State* l)
 {
-	/*char *buffer;
-	buffer = luaL_optstring(l, 1, "");
-	strncpy(console_error, buffer, 254);
-	return 0;*/
-	//luacon_ci->lastError = luaL_optstring(l, 1, "");
-	//TODO IMPLEMENT - Have some sort of error log that is visible outside the console.
+	if((*luacon_currentCommand) && !(*luacon_lastError).length())
+		(*luacon_lastError) = luaL_optstring(l, 1, "");
+	else
+		luacon_ci->Log(CommandInterface::LogNotice, luaL_optstring(l, 1, ""));
+	return 0;
 }
 
 int luatpt_set_pressure(lua_State* l)
@@ -1640,6 +1711,7 @@ int luatpt_input(lua_State* l)
 	free(shadow);
 	return luaL_error(l, "Screen buffer does not exist");*/
 	//TODO IMPLEMENT
+	return 0;
 }
 int luatpt_message_box(lua_State* l)
 {
@@ -1657,6 +1729,7 @@ int luatpt_message_box(lua_State* l)
 	free(text);
 	return luaL_error(l, "Screen buffer does not exist");;*/
 	//TODO IMPLEMENT
+	return 0;
 }
 int luatpt_get_numOfParts(lua_State* l)
 {
@@ -1704,6 +1777,7 @@ int luatpt_hud(lua_State* l)
     hud_enable = (hudstate==0?0:1);
     return 0;*/
 	//TODO IMPLEMENT
+	return 0;
 }
 int luatpt_gravity(lua_State* l)
 {
@@ -1737,11 +1811,10 @@ int luatpt_active_menu(lua_State* l)
 }
 int luatpt_decorations_enable(lua_State* l)
 {
-    /*int aheatstate;
-    aheatstate = luaL_optint(l, 1, 0);
-    decorations_enable = (aheatstate==0?0:1);
-    return 0;*/
-	//TODO IMPLEMENT
+	int decostate;
+	decostate = luaL_optint(l, 1, 0);
+	luacon_model->SetDecoration(decostate==0?false:true);
+	return 0;
 }
 
 int luatpt_heat(lua_State* l)
@@ -1753,13 +1826,13 @@ int luatpt_heat(lua_State* l)
 }
 int luatpt_cmode_set(lua_State* l)
 {
+	//TODO IMPLEMENT
     return luaL_error(l, "Not implemented");
 }
 int luatpt_setfire(lua_State* l)
 {
 	int firesize = luaL_optint(l, 2, 4);
 	float fireintensity = (float)luaL_optnumber(l, 1, 1.0f);
-	//prepare_alpha(firesize, fireintensity);
 	luacon_model->GetRenderer()->prepare_alpha(firesize, fireintensity);
 	return 0;
 }
@@ -1769,6 +1842,7 @@ int luatpt_setdebug(lua_State* l)
 	debug_flags = debug;
 	return 0;*/
 	//TODO IMPLEMENT
+	return luaL_error(l, "Not implemented");
 }
 int luatpt_setfpscap(lua_State* l)
 {
@@ -1778,7 +1852,6 @@ int luatpt_setfpscap(lua_State* l)
 }
 int luatpt_getscript(lua_State* l)
 {
-	//TODO: IMPLEMENT
 	/*char *fileid = NULL, *filedata = NULL, *fileuri = NULL, *fileauthor = NULL, *filename = NULL, *lastError = NULL, *luacommand = NULL;
 	int len, ret,run_script;
 	FILE * outputfile;
@@ -1863,6 +1936,8 @@ fin:
 
 	if(lastError) return luaL_error(l, lastError);
 	return 0;*/
+	//TODO IMPLEMENT
+	return luaL_error(l, "Not implemented");
 }
 
 int luatpt_setwindowsize(lua_State* l)
@@ -1874,6 +1949,7 @@ int luatpt_setwindowsize(lua_State* l)
 	lua_pushnumber(l, result);
 	return 1;*/
 	//TODO Implement
+	return luaL_error(l, "Not implemented");
 }
 
 int luatpt_screenshot(lua_State* l)
@@ -1892,6 +1968,6 @@ int luatpt_screenshot(lua_State* l)
 		}
 		return 0;
 	}*/
-	return luaL_error(l, "Screen buffer does not exist");
+	return luaL_error(l, "Not implemented");
 }
 

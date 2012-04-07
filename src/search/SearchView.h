@@ -27,9 +27,15 @@ private:
 	ui::Button * sortButton;
 	ui::Button * ownButton;
 	ui::Spinner * loadingSpinner;
+
+	ui::Button * removeSelected;
+	ui::Button * unpublishSelected;
+	ui::Button * favouriteSelected;
+	ui::Button * clearSelection;
 	void doSearch();
 public:
 	void NotifySaveListChanged(SearchModel * sender);
+	void NotifySelectedChanged(SearchModel * sender);
 	void NotifyPageChanged(SearchModel * sender);
 	void NotifySortChanged(SearchModel * sender);
 	void NotifyShowOwnChanged(SearchModel * sender);
@@ -37,6 +43,9 @@ public:
 	virtual ~SearchView();
 	void AttachController(SearchController * _c) { c = _c; }
 	virtual void OnTick(float dt);
+	virtual void OnMouseWheel(int x, int y, int d);
+	virtual void OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
+
 };
 
 #endif // SEARCHVIEW_H

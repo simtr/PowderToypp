@@ -27,7 +27,7 @@ SearchView::SearchView():
 			v->doSearch();
 		}
 	};
-	searchField = new ui::Textbox(ui::Point(60, 10), ui::Point((XRES+BARSIZE)-((50*2)+16+10+50+10), 16), "");
+	searchField = new ui::Textbox(ui::Point(60, 10), ui::Point((XRES+BARSIZE)-((60*2)+16+10+50+10), 16), "");
 	searchField->SetAlignment(AlignLeft, AlignBottom);
 	searchField->SetActionCallback(new SearchAction(this));
 
@@ -41,9 +41,9 @@ SearchView::SearchView():
 			v->c->ChangeSort();
 		}
 	};
-	sortButton = new ui::Button(ui::Point(XRES+BARSIZE-50-50-16-10, 10), ui::Point(50, 16), "Sort");
+	sortButton = new ui::Button(ui::Point(XRES+BARSIZE-60-60-16-10+5, 10), ui::Point(60, 16), "Sort");
 	sortButton->SetActionCallback(new SortAction(this));
-	sortButton->SetAlignment(AlignLeft, AlignBottom);
+	sortButton->SetAlignment(AlignCentre, AlignBottom);
 	AddComponent(sortButton);
 
 	class MyOwnAction : public ui::ButtonAction
@@ -56,10 +56,12 @@ SearchView::SearchView():
 			v->c->ShowOwn(sender->GetToggleState());
 		}
 	};
-	ownButton = new ui::Button(ui::Point(XRES+BARSIZE-50-16-10, 10), ui::Point(50, 16), "My Own");
+	ownButton = new ui::Button(ui::Point(XRES+BARSIZE-60-16-10+10, 10), ui::Point(60, 16), "My Own");
 	ownButton->SetTogglable(true);
 	ownButton->SetActionCallback(new MyOwnAction(this));
-	ownButton->SetAlignment(AlignLeft, AlignBottom);
+	if(!Client::Ref().GetAuthUser().ID)
+		ownButton->Enabled = false;
+	ownButton->SetAlignment(AlignCentre, AlignBottom);
 	AddComponent(ownButton);
 
 	class NextPageAction : public ui::ButtonAction
@@ -97,6 +99,70 @@ SearchView::SearchView():
 	ui::Label * searchPrompt = new ui::Label(ui::Point(10, 10), ui::Point(50, 16), "Search:");
 	searchPrompt->SetAlignment(AlignLeft, AlignBottom);
 	AddComponent(searchPrompt);
+
+	class RemoveSelectedAction : public ui::ButtonAction
+	{
+		SearchView * v;
+	public:
+		RemoveSelectedAction(SearchView * _v) { v = _v; }
+		void ActionCallback(ui::Button * sender)
+		{
+			v->c->RemoveSelected();
+		}
+	};
+
+	class UnpublishSelectedAction : public ui::ButtonAction
+	{
+		SearchView * v;
+	public:
+		UnpublishSelectedAction(SearchView * _v) { v = _v; }
+		void ActionCallback(ui::Button * sender)
+		{
+			v->c->UnpublishSelected();
+		}
+	};
+
+	class FavouriteSelectedAction : public ui::ButtonAction
+	{
+		SearchView * v;
+	public:
+		FavouriteSelectedAction(SearchView * _v) { v = _v; }
+		void ActionCallback(ui::Button * sender)
+		{
+			v->c->FavouriteSelected();
+		}
+	};
+
+	class ClearSelectionAction : public ui::ButtonAction
+	{
+		SearchView * v;
+	public:
+		ClearSelectionAction(SearchView * _v) { v = _v; }
+		void ActionCallback(ui::Button * sender)
+		{
+			v->c->ClearSelection();
+		}
+	};
+
+	removeSelected = new ui::Button(ui::Point((((XRES+BARSIZE)-415)/2), YRES+MENUSIZE-18), ui::Point(100, 16), "Delete");
+	removeSelected->Visible = false;
+	removeSelected->SetActionCallback(new RemoveSelectedAction(this));
+	AddComponent(removeSelected);
+
+	unpublishSelected = new ui::Button(ui::Point((((XRES+BARSIZE)-415)/2)+105, YRES+MENUSIZE-18), ui::Point(100, 16), "Unpublish");
+	unpublishSelected->Visible = false;
+	unpublishSelected->SetActionCallback(new UnpublishSelectedAction(this));
+	AddComponent(unpublishSelected);
+
+	favouriteSelected = new ui::Button(ui::Point((((XRES+BARSIZE)-415)/2)+210, YRES+MENUSIZE-18), ui::Point(100, 16), "Favourite");
+	favouriteSelected->Visible = false;
+	favouriteSelected->SetActionCallback(new FavouriteSelectedAction(this));
+	AddComponent(favouriteSelected);
+
+	clearSelection = new ui::Button(ui::Point((((XRES+BARSIZE)-415)/2)+315, YRES+MENUSIZE-18), ui::Point(100, 16), "Clear selection");
+	clearSelection->Visible = false;
+	clearSelection->SetActionCallback(new ClearSelectionAction(this));
+	AddComponent(clearSelection);
 }
 
 void SearchView::doSearch()
@@ -110,12 +176,12 @@ SearchView::~SearchView()
 
 void SearchView::NotifySortChanged(SearchModel * sender)
 {
-    sortButton->SetText("Sort: "+sender->GetSort());
+    sortButton->SetText("Show "+sender->GetSort());
 }
 
 void SearchView::NotifyShowOwnChanged(SearchModel * sender)
 {
-    sortButton->SetToggleState(sender->GetShowOwn());
+    ownButton->SetToggleState(sender->GetShowOwn());
 }
 
 void SearchView::NotifyPageChanged(SearchModel * sender)
@@ -209,6 +275,10 @@ void SearchView::NotifySaveListChanged(SearchModel * sender)
 			{
 				v->c->OpenSave(sender->GetSave()->GetID());
 			}
+			virtual void SelectedCallback(ui::SaveButton * sender)
+			{
+				v->c->Selected(sender->GetSave()->GetID(), sender->GetSelected());
+			}
 		};
 		for(i = 0; i < saves.size(); i++)
 		{
@@ -228,6 +298,8 @@ void SearchView::NotifySaveListChanged(SearchModel * sender)
 						ui::Point(buttonWidth, buttonHeight),
 						saves[i]);
 			saveButton->SetActionCallback(new SaveOpenAction(this));
+			if(Client::Ref().GetAuthUser().ID)
+				saveButton->SetSelectable(true);
 			saveButtons.push_back(saveButton);
 			AddComponent(saveButton);
 			saveX++;
@@ -235,7 +307,52 @@ void SearchView::NotifySaveListChanged(SearchModel * sender)
 	}
 }
 
+void SearchView::NotifySelectedChanged(SearchModel * sender)
+{
+	vector<int> selected = sender->GetSelected();
+	for(int j = 0; j < saveButtons.size(); j++)
+	{
+		saveButtons[j]->SetSelected(false);
+		for(int i = 0; i < selected.size(); i++)
+		{
+			if(saveButtons[j]->GetSave()->GetID()==selected[i])
+				saveButtons[j]->SetSelected(true);
+		}
+	}
+
+	if(selected.size())
+	{
+		removeSelected->Visible = true;
+		unpublishSelected->Visible = true;
+		favouriteSelected->Visible = true;
+		clearSelection->Visible = true;
+	}
+	else
+	{
+		removeSelected->Visible = false;
+		unpublishSelected->Visible = false;
+		favouriteSelected->Visible = false;
+		clearSelection->Visible = false;
+	}
+}
+
 void SearchView::OnTick(float dt)
 {
 	c->Update();
 }
+
+void SearchView::OnMouseWheel(int x, int y, int d)
+{
+	if(!d)
+		return;
+	if(d<0)
+		c->NextPage();
+	else
+		c->PrevPage();
+}
+void SearchView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
+{
+	if(key==KEY_ESCAPE)
+		c->Exit();
+}
+

@@ -10,12 +10,22 @@
 
 int Simulation::Load(unsigned char * data, int dataLength)
 {
-	return SaveLoader::LoadSave(data, dataLength, this, true, 0, 0);
+	return SaveLoader::Load(data, dataLength, this, true, 0, 0);
+}
+
+int Simulation::Load(int x, int y, unsigned char * data, int dataLength)
+{
+	return SaveLoader::Load(data, dataLength, this, false, x, y);
 }
 
 unsigned char * Simulation::Save(int & dataLength)
 {
-	return SaveLoader::BuildSave(dataLength, this, 0, 0, XRES, YRES);
+	return SaveLoader::Build(dataLength, this, 0, 0, XRES, YRES);
+}
+
+unsigned char * Simulation::Save(int x1, int y1, int x2, int y2, int & dataLength)
+{
+	return SaveLoader::Build(dataLength, this, x1, y1, x2-x1, y2-y1);
 }
 
 void Simulation::clear_area(int area_x, int area_y, int area_w, int area_h)
@@ -298,6 +308,177 @@ int Simulation::create_part_add_props(int p, int x, int y, int tv, int rx, int r
 			parts[p].tmp=300;
 	}
 	return p;
+}
+
+void Simulation::ApplyDecoration(int x, int y, int colR_, int colG_, int colB_, int colA_, int mode)
+{
+	int rp;
+	float tr, tg, tb, ta, colR = colR_, colG = colG_, colB = colB_, colA = colA_;
+	rp = pmap[y][x];
+	if (!rp)
+		return;
+
+	ta = (parts[rp>>8].dcolour>>24)&0xFF;
+	tr = (parts[rp>>8].dcolour>>16)&0xFF;
+	tg = (parts[rp>>8].dcolour>>8)&0xFF;
+	tb = (parts[rp>>8].dcolour)&0xFF;
+
+	ta /= 255.0f; tr /= 255.0f; tg /= 255.0f; tb /= 255.0f;
+	colR /= 255.0f; colG /= 255.0f; colB /= 255.0f; colA /= 255.0f;
+
+	if (mode == DECO_DRAW)
+	{
+		ta = colA;
+		tr = colR;
+		tg = colG;
+		tb = colB;
+	}
+	else if (mode == DECO_ADD)
+	{
+		ta += (colA*0.1f)*colA;
+		tr += (colR*0.1f)*colA;
+		tg += (colG*0.1f)*colA;
+		tb += (colB*0.1f)*colA;
+	}
+	else if (mode == DECO_SUBTRACT)
+	{
+		ta -= (colA*0.1f)*colA;
+		tr -= (colR*0.1f)*colA;
+		tg -= (colG*0.1f)*colA;
+		tb -= (colB*0.1f)*colA;
+	}
+	else if (mode == DECO_MULTIPLY)
+	{
+		tr *= 1.0f+(colR*0.1f)*colA;
+		tg *= 1.0f+(colG*0.1f)*colA;
+		tb *= 1.0f+(colB*0.1f)*colA;
+	}
+	else if (mode == DECO_DIVIDE)
+	{
+		tr /= 1.0f+(colR*0.1f)*colA;
+		tg /= 1.0f+(colG*0.1f)*colA;
+		tb /= 1.0f+(colB*0.1f)*colA;
+	}
+
+	colA_ = ta*255.0f;
+	colR_ = tr*255.0f;
+	colG_ = tg*255.0f;
+	colB_ = tb*255.0f;
+
+	if(colA_ > 255)
+		colA_ = 255;
+	else if(colA_ < 0)
+		colA_ = 0;
+	if(colR_ > 255)
+		colR_ = 255;
+	else if(colR_ < 0)
+		colR_ = 0;
+	if(colG_ > 255)
+		colG_ = 255;
+	else if(colG_ < 0)
+		colG_ = 0;
+	if(colB_ > 255)
+		colB_ = 255;
+	else if(colB_ < 0)
+		colB_ = 0;
+	parts[rp>>8].dcolour = ((colA_<<24)|(colR_<<16)|(colG_<<8)|colB_);
+}
+
+void Simulation::ApplyDecorationPoint(int x, int y, int rx, int ry, int colR, int colG, int colB, int colA, int mode, Brush * cBrush)
+{
+	int i, j;
+
+	if(cBrush)
+	{
+		rx = cBrush->GetRadius().X;
+		ry = cBrush->GetRadius().Y;
+	}
+
+	if (rx == 0 && ry == 0)
+	{
+		ApplyDecoration(x, y, colR, colG, colB, colA, mode);
+		return;
+	}
+
+	bool *bitmap = cBrush->GetBitmap();
+	for (j=-ry; j<=ry; j++)
+		for (i=-rx; i<=rx; i++)
+			if(bitmap[(j+ry)*(rx*2)+(i+rx)])
+				ApplyDecoration(x+i, y+j, colR, colG, colB, colA, mode);
+}
+
+void Simulation::ApplyDecorationBox(int x1, int y1, int x2, int y2, int colR, int colG, int colB, int colA, int mode)
+{
+	int i, j;
+
+	if (x1>x2)
+	{
+		i = x2;
+		x2 = x1;
+		x1 = i;
+	}
+	if (y1>y2)
+	{
+		j = y2;
+		y2 = y1;
+		y1 = j;
+	}
+	for (j=y1; j<=y2; j++)
+		for (i=x1; i<=x2; i++)
+			ApplyDecorationPoint(i, j, 0, 0, colR, colG, colB, colA, mode);
+}
+
+void Simulation::ApplyDecorationLine(int x1, int y1, int x2, int y2, int rx, int ry, int colR, int colG, int colB, int colA, int mode, Brush * cBrush)
+{
+	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
+	float e, de;
+	if (cp)
+	{
+		y = x1;
+		x1 = y1;
+		y1 = y;
+		y = x2;
+		x2 = y2;
+		y2 = y;
+	}
+	if (x1 > x2)
+	{
+		y = x1;
+		x1 = x2;
+		x2 = y;
+		y = y1;
+		y1 = y2;
+		y2 = y;
+	}
+	dx = x2 - x1;
+	dy = abs(y2 - y1);
+	e = 0.0f;
+	if (dx)
+		de = dy/(float)dx;
+	else
+		de = 0.0f;
+	y = y1;
+	sy = (y1<y2) ? 1 : -1;
+	for (x=x1; x<=x2; x++)
+	{
+		if (cp)
+			ApplyDecorationPoint(y, x, rx, ry, colR, colG, colB, colA, mode, cBrush);
+		else
+			ApplyDecorationPoint(x, y, rx, ry, colR, colG, colB, colA, mode, cBrush);
+		e += de;
+		if (e >= 0.5f)
+		{
+			y += sy;
+			if (!(rx+ry))
+			{
+				if (cp)
+					ApplyDecorationPoint(y, x, rx, ry, colR, colG, colB, colA, mode, cBrush);
+				else
+					ApplyDecorationPoint(x, y, rx, ry, colR, colG, colB, colA, mode, cBrush);
+			}
+			e -= 1.0f;
+		}
+	}
 }
 
 //this creates particles from a brush, don't use if you want to create one particle

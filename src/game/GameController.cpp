@@ -10,6 +10,7 @@
 #include "login/LoginController.h"
 #include "interface/Point.h"
 #include "dialogues/ErrorMessage.h"
+#include "GameModelException.h"
 
 using namespace std;
 
@@ -34,7 +35,14 @@ public:
 	{
 		if(cc->search->GetLoadedSave())
 		{
-			cc->gameModel->SetSave(new Save(*(cc->search->GetLoadedSave())));
+			try
+			{
+				cc->gameModel->SetSave(new Save(*(cc->search->GetLoadedSave())));
+			}
+			catch(GameModelException & ex)
+			{
+				new ErrorMessage("Cannot open save", ex.what());
+			}
 		}
 	}
 };
@@ -61,8 +69,36 @@ public:
 		if(cc->ssave->GetSaveUploaded())
 		{
 			cc->gameModel->SetSave(new Save(*(cc->ssave->GetSave())));
+
 		}
 		//cc->gameModel->SetUser(cc->loginWindow->GetUser());
+	}
+};
+
+class GameController::TagsCallback: public ControllerCallback
+{
+	GameController * cc;
+public:
+	TagsCallback(GameController * cc_) { cc = cc_; }
+	virtual void ControllerExit()
+	{
+		cc->gameModel->SetSave(new Save(*(cc->tagsWindow->GetSave())));
+	}
+};
+
+class GameController::StampsCallback: public ControllerCallback
+{
+	GameController * cc;
+public:
+	StampsCallback(GameController * cc_) { cc = cc_; }
+	virtual void ControllerExit()
+	{
+		if(cc->stamps->GetStamp())
+		{
+			cc->gameModel->SetStamp(cc->stamps->GetStamp());
+		}
+		else
+			cc->gameModel->SetStamp(NULL);
 	}
 };
 
@@ -71,7 +107,8 @@ GameController::GameController():
 		renderOptions(NULL),
 		loginWindow(NULL),
 		ssave(NULL),
-		console(NULL)
+		console(NULL),
+		tagsWindow(NULL)
 {
 	gameView = new GameView();
 	gameModel = new GameModel();
@@ -99,6 +136,10 @@ GameController::~GameController()
 	{
 		delete loginWindow;
 	}
+	if(tagsWindow)
+	{
+		delete tagsWindow;
+	}
 	if(console)
 	{
 		delete console;
@@ -115,9 +156,31 @@ GameView * GameController::GetView()
 	return gameView;
 }
 
-void GameController::AdjustBrushSize(int direction)
+void GameController::PlaceStamp(ui::Point position)
 {
-	ui::Point newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction, direction);
+	if(gameModel->GetStamp())
+	{
+		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetStamp()->data, gameModel->GetStamp()->dataLength);
+		gameModel->SetPaused(gameModel->GetPaused());
+	}
+}
+
+void GameController::PlaceClipboard(ui::Point position)
+{
+	if(gameModel->GetClipboard())
+	{
+		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetClipboard()->data, gameModel->GetClipboard()->dataLength);
+		gameModel->SetPaused(gameModel->GetPaused());
+	}
+}
+
+void GameController::AdjustBrushSize(int direction, bool logarithmic)
+{
+	ui::Point newSize(0, 0);
+	if(logarithmic)
+		newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction * ((gameModel->GetBrush()->GetRadius().X/10)>0?gameModel->GetBrush()->GetRadius().X/10:1), direction * ((gameModel->GetBrush()->GetRadius().Y/10)>0?gameModel->GetBrush()->GetRadius().Y/10:1));
+	else
+		newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction, direction);
 	if(newSize.X<0)
 			newSize.X = 0;
 	if(newSize.Y<0)
@@ -125,9 +188,13 @@ void GameController::AdjustBrushSize(int direction)
 	gameModel->GetBrush()->SetRadius(newSize);
 }
 
-void GameController::AdjustZoomSize(int direction)
+void GameController::AdjustZoomSize(int direction, bool logarithmic)
 {
-	int newSize = gameModel->GetZoomSize()+direction;
+	int newSize;
+	if(logarithmic)
+		newSize = gameModel->GetZoomSize()+direction;
+	else
+		newSize = gameModel->GetZoomSize()+(((gameModel->GetZoomSize()/10)>0?(gameModel->GetZoomSize()/10):1)*direction);
 	if(newSize<5)
 			newSize = 5;
 	if(newSize>64)
@@ -225,6 +292,60 @@ void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueu
 	}
 }
 
+void GameController::StampRegion(ui::Point point1, ui::Point point2)
+{
+	int saveSize;
+	unsigned char * saveData;
+	saveData = gameModel->GetSimulation()->Save(point1.X, point1.Y, point2.X, point2.Y, saveSize);
+	if(saveData && saveSize)
+		gameModel->AddStamp(saveData, saveSize);
+}
+
+void GameController::CopyRegion(ui::Point point1, ui::Point point2)
+{
+	int saveSize;
+	unsigned char * saveData;
+	saveData = gameModel->GetSimulation()->Save(point1.X, point1.Y, point2.X, point2.Y, saveSize);
+
+	if(saveData && saveSize)
+		gameModel->SetClipboard(saveData, saveSize);
+}
+
+bool GameController::MouseMove(int x, int y, int dx, int dy)
+{
+	return commandInterface->OnMouseMove(x, y, dx, dy);
+}
+
+bool GameController::MouseDown(int x, int y, unsigned button)
+{
+	return commandInterface->OnMouseDown(x, y, button);
+}
+
+bool GameController::MouseUp(int x, int y, unsigned button)
+{
+	return commandInterface->OnMouseUp(x, y, button);
+}
+
+bool GameController::MouseWheel(int x, int y, int d)
+{
+	return commandInterface->OnMouseWheel(x, y, d);
+}
+
+bool GameController::KeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
+{
+	return commandInterface->OnKeyPress(key, character, shift, ctrl, alt);
+}
+
+bool GameController::KeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt)
+{
+	return commandInterface->OnKeyRelease(key, character, shift, ctrl, alt);
+}
+
+void GameController::Tick()
+{
+	commandInterface->OnTick();
+}
+
 void GameController::Update()
 {
 	gameModel->GetSimulation()->update_particles();
@@ -282,9 +403,36 @@ void GameController::SetPaused()
 	gameModel->SetPaused(!gameModel->GetPaused());
 }
 
+void GameController::SetDecoration(bool decorationState)
+{
+	gameModel->SetDecoration(decorationState);
+}
+
+void GameController::SetDecoration()
+{
+	gameModel->SetDecoration(!gameModel->GetDecoration());
+}
+
+void GameController::SetColour(ui::Colour colour)
+{
+	gameModel->SetColourSelectorColour(colour);
+}
+
 void GameController::SetActiveMenu(Menu * menu)
 {
 	gameModel->SetActiveMenu(menu);
+	vector<Menu*> menuList = gameModel->GetMenuList();
+	bool set = false;
+	for(int i = 0; i < menuList.size(); i++)
+	{
+		if(menuList[i]==menu && i == SC_DECO)
+		{
+			gameModel->SetColourSelectorVisibility(true);
+			set = true;
+		}
+	}
+	if(!set)
+		gameModel->SetColourSelectorVisibility(false);
 }
 
 void GameController::SetActiveTool(int toolSelection, Tool * tool)
@@ -306,7 +454,28 @@ void GameController::OpenLogin()
 
 void GameController::OpenTags()
 {
-	//TODO: Implement
+	if(gameModel->GetUser().ID)
+	{
+		if(gameModel->GetSave() && gameModel->GetSave()->GetID())
+		{
+			tagsWindow = new TagsController(new TagsCallback(this), gameModel->GetSave());
+			ui::Engine::Ref().ShowWindow(tagsWindow->GetView());
+		}
+		else
+		{
+			new ErrorMessage("Error", "No save open");
+		}
+	}
+	else
+	{
+		new ErrorMessage("Error", "You need to login to edit tags.");
+	}
+}
+
+void GameController::OpenStamps()
+{
+	stamps = new StampsController(new StampsCallback(this));
+	ui::Engine::Ref().ShowWindow(stamps->GetView());
 }
 
 void GameController::OpenDisplayOptions()

@@ -6,6 +6,7 @@
 #include "Global.h"
 #include "Engine.h"
 #include "client/Client.h"
+#include "simulation/SaveRenderer.h"
 
 namespace ui {
 
@@ -16,7 +17,9 @@ SaveButton::SaveButton(Point position, Point size, Save * save):
 	isMouseInside(false),
 	isButtonDown(false),
 	actionCallback(NULL),
-	voteColour(255, 0, 0)
+	voteColour(255, 0, 0),
+	selectable(false),
+	selected(false)
 {
 	if(save->votesUp==0)
 		voteRatio = 0.0f;
@@ -51,29 +54,36 @@ void SaveButton::Tick(float dt)
 	float scaleFactorY = 1.0f, scaleFactorX = 1.0f;
 	if(!thumbnail)
 	{
-		tempThumb = Client::Ref().GetThumbnail(save->GetID(), 0);
-		if(tempThumb)
+		if(save->GetID())
 		{
-			thumbnail = new Thumbnail(*tempThumb); //Store a local copy of the thumbnail
-			if(thumbnail->Data)
+			tempThumb = Client::Ref().GetThumbnail(save->GetID(), 0);
+			if(tempThumb)
 			{
-				if(thumbnail->Size.Y > (Size.Y-25))
-				{
-					scaleFactorY = ((float)(Size.Y-25))/((float)thumbnail->Size.Y);
-				}
-				if(thumbnail->Size.X > Size.X-3)
-				{
-					scaleFactorX = ((float)Size.X-3)/((float)thumbnail->Size.X);
-				}
-				if(scaleFactorY < 1.0f || scaleFactorX < 1.0f)
-				{
-					float scaleFactor = scaleFactorY < scaleFactorX ? scaleFactorY : scaleFactorX;
-					pixel * thumbData = thumbnail->Data;
-					thumbnail->Data = Graphics::resample_img(thumbData, thumbnail->Size.X, thumbnail->Size.Y, thumbnail->Size.X * scaleFactor, thumbnail->Size.Y * scaleFactor);
-					thumbnail->Size.X *= scaleFactor;
-					thumbnail->Size.Y *= scaleFactor;
-					free(thumbData);
-				}
+				thumbnail = new Thumbnail(*tempThumb); //Store a local copy of the thumbnail
+			}
+		}
+		else
+		{
+			thumbnail = SaveRenderer::Ref().Render(save->GetData(), save->GetDataLength());
+		}
+		if(thumbnail && thumbnail->Data)
+		{
+			if(thumbnail->Size.Y > (Size.Y-25))
+			{
+				scaleFactorY = ((float)(Size.Y-25))/((float)thumbnail->Size.Y);
+			}
+			if(thumbnail->Size.X > Size.X-3)
+			{
+				scaleFactorX = ((float)Size.X-3)/((float)thumbnail->Size.X);
+			}
+			if(scaleFactorY < 1.0f || scaleFactorX < 1.0f)
+			{
+				float scaleFactor = scaleFactorY < scaleFactorX ? scaleFactorY : scaleFactorX;
+				pixel * thumbData = thumbnail->Data;
+				thumbnail->Data = Graphics::resample_img(thumbData, thumbnail->Size.X, thumbnail->Size.Y, thumbnail->Size.X * scaleFactor, thumbnail->Size.Y * scaleFactor);
+				thumbnail->Size.X *= scaleFactor;
+				thumbnail->Size.Y *= scaleFactor;
+				free(thumbData);
 			}
 		}
 	}
@@ -84,6 +94,11 @@ void SaveButton::Draw(const Point& screenPos)
 	Graphics * g = ui::Engine::Ref().g;
 	float scaleFactor;
 	ui::Point thumbBoxSize(0, 0);
+
+	if(selected && selectable)
+	{
+		g->fillrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 100, 170, 255, 100);
+	}
 
 	if(thumbnail)
 	{
@@ -128,6 +143,14 @@ void SaveButton::Draw(const Point& screenPos)
 		g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->name.c_str()))/2, screenPos.Y+Size.Y - 21, save->name, 180, 180, 180, 255);
 		g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->userName.c_str()))/2, screenPos.Y+Size.Y - 10, save->userName, 100, 130, 160, 255);
 	}
+
+	if(isMouseInside && selectable)
+	{
+		g->clearrect(screenPos.X+(Size.X-20), screenPos.Y+6, 14, 14);
+		g->drawrect(screenPos.X+(Size.X-20), screenPos.Y+6, 14, 14, 255, 255, 255, 255);
+		if(selected)
+			g->fillrect(screenPos.X+(Size.X-18), screenPos.Y+8, 10, 10, 255, 255, 255, 255);
+	}
 }
 
 void SaveButton::OnMouseUnclick(int x, int y, unsigned int button)
@@ -135,6 +158,13 @@ void SaveButton::OnMouseUnclick(int x, int y, unsigned int button)
 	if(button != 1)
 	{
 		return; //left click only!
+	}
+
+	if(x>=Size.X-20 && y>=6 && y<=20 && x<=Size.X-6 && selectable)
+	{
+		selected = !selected;
+		DoSelection();
+		return;
 	}
 
 	if(isButtonDown)
@@ -147,7 +177,13 @@ void SaveButton::OnMouseUnclick(int x, int y, unsigned int button)
 
 void SaveButton::OnMouseClick(int x, int y, unsigned int button)
 {
+	if(button !=1 && selectable)
+	{
+		selected = !selected;
+		DoSelection();
+	}
 	if(button != 1) return; //left click only!
+
 	isButtonDown = true;
 }
 
@@ -165,6 +201,12 @@ void SaveButton::DoAction()
 {
 	if(actionCallback)
 		actionCallback->ActionCallback(this);
+}
+
+void SaveButton::DoSelection()
+{
+	if(selectable)
+		actionCallback->SelectedCallback(this);
 }
 
 void SaveButton::SetActionCallback(SaveButtonAction * action)

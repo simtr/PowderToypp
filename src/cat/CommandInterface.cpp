@@ -31,6 +31,11 @@ std::string CommandInterface::FormatCommand(std::string command)
 	return command;
 }
 
+void CommandInterface::Log(LogType type, std::string message)
+{
+	m->Log(message);
+}
+
 int CommandInterface::GetPropertyOffset(std::string key_, FormatType & format)
 {
 	char * key = (char *)key_.c_str();

@@ -10,7 +10,9 @@
 #include "render/RenderController.h"
 #include "login/LoginController.h"
 #include "ssave/SSaveController.h"
+#include "tags/TagsController.h"
 #include "console/ConsoleController.h"
+#include "stamps/StampsController.h"
 //#include "cat/TPTScriptInterface.h"
 #include "cat/LuaScriptInterface.h"
 #include "Menu.h"
@@ -32,34 +34,55 @@ private:
 	LoginController * loginWindow;
 	SSaveController * ssave;
 	ConsoleController * console;
+	TagsController * tagsWindow;
+	StampsController * stamps;
 	CommandInterface * commandInterface;
 public:
 	class LoginCallback;
 	class SearchCallback;
 	class RenderCallback;
 	class SSaveCallback;
+	class TagsCallback;
+	class StampsCallback;
 	GameController();
 	~GameController();
 	GameView * GetView();
+
+	bool MouseMove(int x, int y, int dx, int dy);
+	bool MouseDown(int x, int y, unsigned button);
+	bool MouseUp(int x, int y, unsigned button);
+	bool MouseWheel(int x, int y, int d);
+	bool KeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
+	bool KeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt);
+	void Tick();
+
 	void SetZoomEnabled(bool zoomEnable);
 	void SetZoomPosition(ui::Point position);
-	void AdjustBrushSize(int direction);
-	void AdjustZoomSize(int direction);
+	void AdjustBrushSize(int direction, bool logarithmic = false);
+	void AdjustZoomSize(int direction, bool logarithmic = false);
 	void DrawPoints(int toolSelection, queue<ui::Point*> & pointQueue);
 	void DrawRect(int toolSelection, ui::Point point1, ui::Point point2);
 	void DrawLine(int toolSelection, ui::Point point1, ui::Point point2);
 	void DrawFill(int toolSelection, ui::Point point);
+	void StampRegion(ui::Point point1, ui::Point point2);
+	void CopyRegion(ui::Point point1, ui::Point point2);
 	void Update();
 	void SetPaused(bool pauseState);
 	void SetPaused();
+	void SetDecoration(bool decorationState);
+	void SetDecoration();
 	void SetActiveMenu(Menu * menu);
 	void SetActiveTool(int toolSelection, Tool * tool);
+	void SetColour(ui::Colour colour);
 	void OpenSearch();
 	void OpenLogin();
 	void OpenTags();
 	void OpenDisplayOptions();
 	void OpenRenderOptions();
 	void OpenSaveWindow();
+	void OpenStamps();
+	void PlaceStamp(ui::Point position);
+	void PlaceClipboard(ui::Point position);
 	void ClearSim();
 	void ReloadSim();
 	void Vote(int direction);
