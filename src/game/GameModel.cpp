@@ -11,7 +11,6 @@
 #include "GameModelException.h"
 
 GameModel::GameModel():
-	activeTools({NULL, NULL, NULL}),
 	sim(NULL),
 	ren(NULL),
 	currentBrush(0),
@@ -24,6 +23,8 @@ GameModel::GameModel():
 	sim = new Simulation();
 	ren = new Renderer(ui::Engine::Ref().g, sim);
 
+    memset(activeTools, 0, sizeof(activeTools));
+    
 	//Load config into renderer
 	try
 	{
@@ -70,10 +71,10 @@ GameModel::GameModel():
 	//Build menus from Simulation elements
 	for(int i = 0; i < PT_NUM; i++)
 	{
-		if(sim->ptypes[i].menusection < 12 && sim->ptypes[i].enabled && sim->ptypes[i].menu)
+		if(sim->elements[i].MenuSection < 12 && sim->elements[i].Enabled && sim->elements[i].MenuVisible)
 		{
-			Tool * tempTool = new ElementTool(i, sim->ptypes[i].name, PIXR(sim->ptypes[i].pcolors), PIXG(sim->ptypes[i].pcolors), PIXB(sim->ptypes[i].pcolors));
-			menuList[sim->ptypes[i].menusection]->AddTool(tempTool);
+			Tool * tempTool = new ElementTool(i, sim->elements[i].Name, PIXR(sim->elements[i].Colour), PIXG(sim->elements[i].Colour), PIXB(sim->elements[i].Colour));
+			menuList[sim->elements[i].MenuSection]->AddTool(tempTool);
 		}
 	}
 
@@ -87,9 +88,20 @@ GameModel::GameModel():
 	//Build other menus from wall data
 	for(int i = 0; i < UI_WALLCOUNT; i++)
 	{
-		Tool * tempTool = new ElementTool(i+UI_WALLSTART, "", PIXR(sim->wtypes[i].colour), PIXG(sim->wtypes[i].colour), PIXB(sim->wtypes[i].colour));
+		Tool * tempTool = new WallTool(i, "", PIXR(sim->wtypes[i].colour), PIXG(sim->wtypes[i].colour), PIXB(sim->wtypes[i].colour));
 		menuList[SC_WALL]->AddTool(tempTool);
 		//sim->wtypes[i]
+	}
+	
+	//Add special sign and prop tools
+	menuList[SC_TOOL]->AddTool(new SignTool());
+	menuList[SC_TOOL]->AddTool(new PropertyTool());
+	
+	//Build menu for simtools
+	for(int i = 0; i < sim->tools.size(); i++)
+	{
+		Tool * tempTool = new Tool(i, sim->tools[i]->Name, PIXR(sim->tools[i]->Colour), PIXG(sim->tools[i]->Colour), PIXB(sim->tools[i]->Colour));
+		menuList[SC_TOOL]->AddTool(tempTool);
 	}
 
 	//Add decoration tools to menu
@@ -97,11 +109,12 @@ GameModel::GameModel():
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendRemove, "SUB", 0, 0, 0));
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendMultiply, "MUL", 0, 0, 0));
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendDivide, "DIV", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSmudge, "SMDG", 0, 0, 0));
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSet, "SET", 0, 0, 0));
 
 	//Set default brush palette
-	brushList.push_back(new Brush(ui::Point(4, 4)));
 	brushList.push_back(new EllipseBrush(ui::Point(4, 4)));
+	brushList.push_back(new Brush(ui::Point(4, 4)));
 
 	//Set default tools
 	activeTools[0] = menuList[SC_POWDERS]->GetToolList()[0];
@@ -112,7 +125,6 @@ GameModel::GameModel():
 	toolList = menuList[SC_POWDERS]->GetToolList();
 
 	//Load last user
-	std::cout << Client::Ref().GetAuthUser().Username << std::endl;
 	if(Client::Ref().GetAuthUser().ID)
 	{
 		currentUser = Client::Ref().GetAuthUser();
@@ -163,8 +175,8 @@ GameModel::~GameModel()
 		delete clipboard;
 	if(stamp)
 		delete stamp;
-	if(activeTools)
-		delete activeTools;
+	//if(activeTools)
+	//	delete[] activeTools;
 }
 
 void GameModel::SetVote(int direction)
@@ -251,19 +263,19 @@ vector<Menu*> GameModel::GetMenuList()
 	return menuList;
 }
 
-Save * GameModel::GetSave()
+SaveInfo * GameModel::GetSave()
 {
 	return currentSave;
 }
 
-void GameModel::SetSave(Save * newSave)
+void GameModel::SetSave(SaveInfo * newSave)
 {
 	if(currentSave)
 		delete currentSave;
 	currentSave = newSave;
 	if(currentSave)
 	{
-		int returnVal = sim->Load(currentSave->GetData(), currentSave->GetDataLength());
+		int returnVal = sim->Load(currentSave->GetGameSave());
 		if(returnVal){
 			delete currentSave;
 			currentSave = NULL;
@@ -417,44 +429,39 @@ void GameModel::ClearSimulation()
 	sim->clear_sim();
 }
 
-void GameModel::AddStamp(unsigned char * saveData, int saveSize)
+void GameModel::SetStamp(GameSave * save)
 {
-	Save * tempSave = new Save(0, 0, 0, 0, "", "");
-	tempSave->SetData(saveData, saveSize);
-	Client::Ref().AddStamp(tempSave);
-	delete tempSave;
+	if(stamp)
+		delete stamp;
+	stamp = new GameSave(*save);
+	notifyStampChanged();
 }
 
-void GameModel::SetClipboard(unsigned char * saveData, int saveSize)
+void GameModel::AddStamp(GameSave * save)
 {
-	if(clipboard)
-		delete clipboard;
-	clipboard = new Save(0, 0, 0, 0, "", "");
-	clipboard->SetData(saveData, saveSize);
+	if(stamp)
+		delete stamp;
+	stamp = new GameSave(*save);
+	Client::Ref().AddStamp(save);
 	notifyClipboardChanged();
 }
 
-Save * GameModel::GetClipboard()
+void GameModel::SetClipboard(GameSave * save)
+{
+	if(clipboard)
+		delete clipboard;
+	clipboard = save;
+	notifyClipboardChanged();
+}
+
+GameSave * GameModel::GetClipboard()
 {
 	return clipboard;
 }
 
-Save * GameModel::GetStamp()
+GameSave * GameModel::GetStamp()
 {
 	return stamp;
-}
-
-void GameModel::SetStamp(Save * newStamp)
-{
-	if(stamp)
-		delete stamp;
-	if(newStamp)
-	{
-		stamp = new Save(*newStamp);
-	}
-	else
-		stamp = NULL;
-	notifyStampChanged();
 }
 
 void GameModel::Log(string message)

@@ -1,4 +1,5 @@
 #include <sstream>
+#include <iomanip>
 
 #include "Config.h"
 #include "GameView.h"
@@ -29,7 +30,8 @@ GameView::GameView():
 	selectPoint1(0, 0),
 	selectPoint2(0, 0),
 	stampThumb(NULL),
-	clipboardThumb(NULL)
+	clipboardThumb(NULL),
+	mousePosition(0, 0)
 {
 	int currentX = 1;
 	//Set up UI
@@ -43,7 +45,7 @@ GameView::GameView():
 			v->c->OpenSearch();
 		}
 	};
-	searchButton = new ui::Button(ui::Point(currentX, Size.Y-18), ui::Point(16, 16));  //Open
+	searchButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(17, 15));  //Open
 	searchButton->SetIcon(IconOpen);
 	currentX+=18;
 	searchButton->SetTogglable(false);
@@ -60,7 +62,7 @@ GameView::GameView():
             v->c->ReloadSim();
         }
     };
-    reloadButton = new ui::Button(ui::Point(currentX, Size.Y-18), ui::Point(16, 16));
+    reloadButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(17, 15));
     reloadButton->SetIcon(IconReload);
     currentX+=18;
     reloadButton->SetActionCallback(new ReloadAction(this));
@@ -76,9 +78,10 @@ GameView::GameView():
             v->c->OpenSaveWindow();
         }
     };
-    saveSimulationButton = new ui::Button(ui::Point(currentX, Size.Y-18), ui::Point(Size.X/5, 16));
+    saveSimulationButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(150, 15));
+	saveSimulationButton->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
     saveSimulationButton->SetIcon(IconSave);
-    currentX+=(Size.X/5)+2;
+    currentX+=151;
     saveSimulationButton->SetActionCallback(new SaveSimulationAction(this));
     AddComponent(saveSimulationButton);
 
@@ -92,9 +95,9 @@ GameView::GameView():
         	v->c->Vote(1);
         }
     };
-    upVoteButton = new ui::Button(ui::Point(currentX, Size.Y-18), ui::Point(16, 16));
+    upVoteButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(15, 15));
     upVoteButton->SetIcon(IconVoteUp);
-    currentX+=16;
+    currentX+=15;
     upVoteButton->SetActionCallback(new UpVoteAction(this));
     AddComponent(upVoteButton);
 
@@ -108,9 +111,9 @@ GameView::GameView():
         	v->c->Vote(-1);
         }
     };
-    downVoteButton = new ui::Button(ui::Point(currentX, Size.Y-18), ui::Point(16, 16));
+    downVoteButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(15, 15));
     downVoteButton->SetIcon(IconVoteDown);
-    currentX+=18;
+    currentX+=16;
     downVoteButton->SetActionCallback(new DownVoteAction(this));
     AddComponent(downVoteButton);
 
@@ -124,9 +127,10 @@ GameView::GameView():
             v->c->OpenTags();
         }
     };
-    tagSimulationButton = new ui::Button(ui::Point(currentX, Size.Y-18), ui::Point(Size.X-(currentX+176), 16));
+    tagSimulationButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(250, 15));
+	tagSimulationButton->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
     tagSimulationButton->SetIcon(IconTag);
-    currentX+=Size.X-(currentX+176);
+    currentX+=251;
     tagSimulationButton->SetActionCallback(new TagSimulationAction(this));
     AddComponent(tagSimulationButton);
 
@@ -140,7 +144,7 @@ GameView::GameView():
             v->c->ClearSim();
         }
     };
-    clearSimButton = new ui::Button(ui::Point(Size.X-174, Size.Y-18), ui::Point(16, 16));
+    clearSimButton = new ui::Button(ui::Point(Size.X-159, Size.Y-16), ui::Point(17, 15));
     clearSimButton->SetIcon(IconNew);
     clearSimButton->SetActionCallback(new ClearSimAction(this));
     AddComponent(clearSimButton);
@@ -155,7 +159,8 @@ GameView::GameView():
             v->c->OpenLogin();
         }
     };
-    loginButton = new ui::Button(ui::Point(Size.X-156, Size.Y-18), ui::Point(100, 16), "Login");
+    loginButton = new ui::Button(ui::Point(Size.X-141, Size.Y-16), ui::Point(92, 15), "Login");
+	loginButton->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
     loginButton->SetIcon(IconLogin);
     loginButton->SetActionCallback(new LoginAction(this));
     AddComponent(loginButton);
@@ -167,10 +172,10 @@ GameView::GameView():
         SimulationOptionAction(GameView * _v) { v = _v; }
         void ActionCallback(ui::Button * sender)
         {
-            v->c->OpenDisplayOptions();
+            v->c->OpenOptions();
         }
     };
-    simulationOptionButton = new ui::Button(ui::Point(Size.X-54, Size.Y-18), ui::Point(16, 16));
+    simulationOptionButton = new ui::Button(ui::Point(Size.X-48, Size.Y-16), ui::Point(15, 15));
     simulationOptionButton->SetIcon(IconSimulationSettings);
     simulationOptionButton->SetActionCallback(new SimulationOptionAction(this));
     AddComponent(simulationOptionButton);
@@ -185,7 +190,7 @@ GameView::GameView():
             v->c->OpenRenderOptions();
         }
     };
-    displayModeButton = new ui::Button(ui::Point(Size.X-36, Size.Y-18), ui::Point(16, 16));
+    displayModeButton = new ui::Button(ui::Point(Size.X-32, Size.Y-16), ui::Point(15, 15));
     displayModeButton->SetIcon(IconRenderSettings);
     displayModeButton->SetActionCallback(new DisplayModeAction(this));
     AddComponent(displayModeButton);
@@ -200,7 +205,7 @@ GameView::GameView():
 			v->c->SetPaused(sender->GetToggleState());
 		}
 	};
-	pauseButton = new ui::Button(ui::Point(Size.X-18, Size.Y-18), ui::Point(16, 16));  //Pause
+	pauseButton = new ui::Button(ui::Point(Size.X-16, Size.Y-16), ui::Point(15, 15));  //Pause
 	pauseButton->SetIcon(IconPause);
 	pauseButton->SetTogglable(true);
 	pauseButton->SetActionCallback(new PauseAction(this));
@@ -233,9 +238,13 @@ class GameView::MenuAction: public ui::ButtonAction
 public:
 	Menu * menu;
 	MenuAction(GameView * _v, Menu * menu_) { v = _v; menu = menu_; }
-	void ActionCallback(ui::Button * sender)
+	void MouseEnterCallback(ui::Button * sender)
 	{
 		v->c->SetActiveMenu(menu);
+	}
+	void ActionCallback(ui::Button * sender)
+	{
+		MouseEnterCallback(sender);
 	}
 };
 
@@ -255,7 +264,7 @@ public:
 
 void GameView::NotifyMenuListChanged(GameModel * sender)
 {
-	int currentY = YRES+MENUSIZE-18-(sender->GetMenuList().size()*18);
+	int currentY = YRES+MENUSIZE-16-(sender->GetMenuList().size()*16);
 	for(int i = 0; i < menuButtons.size(); i++)
 	{
 		RemoveComponent(menuButtons[i]);
@@ -273,13 +282,24 @@ void GameView::NotifyMenuListChanged(GameModel * sender)
 	{
 		std::string tempString = "";
 		tempString += menuList[i]->GetIcon();
-		ui::Button * tempButton = new ui::Button(ui::Point(XRES+BARSIZE-18, currentY), ui::Point(16, 16), tempString);
+		ui::Button * tempButton = new ui::Button(ui::Point(XRES+BARSIZE-16, currentY), ui::Point(15, 15), tempString);
+		tempButton->Appearance.Margin = ui::Border(0, 2, 3, 2);
 		tempButton->SetTogglable(true);
 		tempButton->SetActionCallback(new MenuAction(this, menuList[i]));
-		currentY+=18;
+		currentY+=16;
 		AddComponent(tempButton);
 		menuButtons.push_back(tempButton);
 	}
+}
+
+void GameView::SetSample(Particle sample)
+{
+	this->sample = sample;
+}
+
+ui::Point GameView::GetMousePosition()
+{
+	return mousePosition;
 }
 
 void GameView::NotifyActiveToolsChanged(GameModel * sender)
@@ -332,12 +352,12 @@ void GameView::NotifyToolListChanged(GameModel * sender)
 	for(int i = 0; i < toolList.size(); i++)
 	{
 		//ToolButton * tempButton = new ToolButton(ui::Point(XRES+1, currentY), ui::Point(28, 15), toolList[i]->GetName());
-		ToolButton * tempButton = new ToolButton(ui::Point(currentX, YRES+1), ui::Point(28, 15), toolList[i]->GetName());
+		ToolButton * tempButton = new ToolButton(ui::Point(currentX, YRES+1), ui::Point(30, 18), toolList[i]->GetName());
 		//currentY -= 17;
-		currentX -= 32;
+		currentX -= 31;
 		tempButton->SetActionCallback(new ToolAction(this, toolList[i]));
 
-		tempButton->SetBackgroundColour(ui::Colour(toolList[i]->colRed, toolList[i]->colGreen, toolList[i]->colBlue));
+		tempButton->Appearance.BackgroundInactive = ui::Colour(toolList[i]->colRed, toolList[i]->colGreen, toolList[i]->colBlue);
 
 		if(sender->GetActiveTool(0) == toolList[i])
 		{
@@ -352,7 +372,8 @@ void GameView::NotifyToolListChanged(GameModel * sender)
 			tempButton->SetSelectionState(2);	//Tertiary
 		}
 
-		tempButton->SetAlignment(AlignCentre, AlignBottom);
+		tempButton->Appearance.HorizontalAlign = ui::Appearance::AlignCentre;
+		tempButton->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
 		AddComponent(tempButton);
 		toolButtons.push_back(tempButton);
 	}
@@ -427,14 +448,14 @@ void GameView::NotifySaveChanged(GameModel * sender)
 		reloadButton->Enabled = true;
 		upVoteButton->Enabled = (sender->GetSave()->GetID() && sender->GetUser().ID && sender->GetSave()->GetVote()==0);
 		if(sender->GetSave()->GetID() && sender->GetUser().ID && sender->GetSave()->GetVote()==1)
-			upVoteButton->SetBackgroundColour(ui::Colour(0, 200, 40));
+			upVoteButton->Appearance.BackgroundInactive = (ui::Colour(0, 200, 40));
 		else
-			upVoteButton->SetBackgroundColour(ui::Colour(0, 0, 0));
+			upVoteButton->Appearance.BackgroundInactive = (ui::Colour(0, 0, 0));
 		downVoteButton->Enabled = upVoteButton->Enabled;
 		if(sender->GetSave()->GetID() && sender->GetUser().ID && sender->GetSave()->GetVote()==-1)
-			downVoteButton->SetBackgroundColour(ui::Colour(200, 40, 40));
+			downVoteButton->Appearance.BackgroundInactive = (ui::Colour(200, 40, 40));
 		else
-			downVoteButton->SetBackgroundColour(ui::Colour(0, 0, 0));
+			downVoteButton->Appearance.BackgroundInactive = (ui::Colour(0, 0, 0));
 		tagSimulationButton->Enabled = (sender->GetSave()->GetID() && sender->GetUser().ID);
 		if(sender->GetSave()->GetID())
 		{
@@ -454,9 +475,9 @@ void GameView::NotifySaveChanged(GameModel * sender)
 		saveSimulationButton->SetText("");
 		reloadButton->Enabled = false;
 		upVoteButton->Enabled = false;
-		upVoteButton->SetBackgroundColour(ui::Colour(0, 0, 0));
+		upVoteButton->Appearance.BackgroundInactive = (ui::Colour(0, 0, 0));
 		downVoteButton->Enabled = false;
-		upVoteButton->SetBackgroundColour(ui::Colour(0, 0, 0));
+		upVoteButton->Appearance.BackgroundInactive = (ui::Colour(0, 0, 0));
 		tagSimulationButton->Enabled = false;
 		tagSimulationButton->SetText("");
 	}
@@ -469,6 +490,7 @@ void GameView::NotifyBrushChanged(GameModel * sender)
 
 void GameView::OnMouseMove(int x, int y, int dx, int dy)
 {
+	mousePosition = c->PointTranslate(ui::Point(x, y));
 	if(selectMode!=SelectNone)
 	{
 		if(selectMode==PlaceStamp || selectMode==PlaceClipboard)
@@ -586,6 +608,7 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 			}
 			if(drawMode == DrawPoints)
 			{
+				c->ToolClick(toolIndex, ui::Point(x, y));
 				pointQueue.push(new ui::Point(x, y));
 			}
 			if(drawModeReset)
@@ -811,7 +834,7 @@ void GameView::NotifyClipboardChanged(GameModel * sender)
 		delete clipboardThumb;
 	if(sender->GetClipboard())
 	{
-		clipboardThumb = SaveRenderer::Ref().Render(sender->GetClipboard()->GetData(), sender->GetClipboard()->GetDataLength());
+		clipboardThumb = SaveRenderer::Ref().Render(sender->GetClipboard());
 	}
 	else
 		clipboardThumb = NULL;
@@ -824,7 +847,7 @@ void GameView::NotifyStampChanged(GameModel * sender)
 		delete stampThumb;
 	if(sender->GetStamp())
 	{
-		stampThumb = SaveRenderer::Ref().Render(sender->GetStamp()->GetData(), sender->GetStamp()->GetDataLength());
+		stampThumb = SaveRenderer::Ref().Render(sender->GetStamp());
 	}
 	else
 		stampThumb = NULL;
@@ -837,13 +860,17 @@ void GameView::changeColour()
 
 void GameView::OnDraw()
 {
+	Graphics * g = ui::Engine::Ref().g;
 	if(ren)
 	{
-		Graphics * g = ui::Engine::Ref().g;
+		ren->clearScreen(1.0f);
 		ren->draw_air();
 		ren->render_parts();
 		ren->render_fire();
+		ren->draw_grav();
 		ren->DrawWalls();
+		ren->DrawSigns();
+		ren->FinaliseParts();
 		if(activeBrush && currentMouse.X > 0 && currentMouse.X < XRES && currentMouse.Y > 0 && currentMouse.Y < YRES)
 		{
 			if(drawMode==DrawRect && isMouseDown)
@@ -860,7 +887,6 @@ void GameView::OnDraw()
 			}
 		}
 		ren->RenderZoom();
-		ren->DrawSigns();
 
 		if(selectMode!=SelectNone)
 		{
@@ -925,10 +951,22 @@ void GameView::OnDraw()
 			{
 				string message = (*iter);
 				startY -= 13;
-				g->fillrect(startX-3, startY-3, Graphics::textwidth((char*)message.c_str())+6, 14, 0, 0, 0, 100);
+				g->fillrect(startX-3, startY-3, Graphics::textwidth((char*)message.c_str())+6                                                                                                                                        , 14, 0, 0, 0, 100);
 				g->drawtext(startX, startY, message.c_str(), 255, 255, 255, startAlpha);
 				startAlpha-=14;
 			}
 		}
 	}
+
+	std::stringstream sampleInfo;
+	sampleInfo.precision(2);
+	if(sample.type)
+		sampleInfo << c->ElementResolve(sample.type) << ", Temp: " << std::fixed << sample.temp -273.15f;
+	else
+		sampleInfo << "Empty";
+
+	if(sample.ctype && sample.ctype>0 && sample.ctype<PT_NUM)
+		sampleInfo << ", Ctype: " << c->ElementResolve(sample.ctype);
+
+	g->drawtext(XRES+BARSIZE-(10+Graphics::textwidth((char*)sampleInfo.str().c_str())), 10, (const char*)sampleInfo.str().c_str(), 255, 255, 255, 255);
 }

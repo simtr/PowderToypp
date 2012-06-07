@@ -2,7 +2,6 @@
 #include <iostream>
 #include <stdexcept>
 #include "Config.h"
-#include "Global.h"
 #include "interface/Point.h"
 #include "interface/Textbox.h"
 #include "interface/Keys.h"
@@ -12,15 +11,11 @@ using namespace ui;
 Textbox::Textbox(Point position, Point size, std::string textboxText):
 	Component(position, size),
 	text(textboxText),
-	textPosition(ui::Point(0, 0)),
-	textVAlign(AlignMiddle),
-	textHAlign(AlignCentre),
 	actionCallback(NULL),
 	masked(false),
 	border(true)
 {
 	SetText(textboxText);
-	TextPosition();
 	cursor = text.length();
 }
 
@@ -40,32 +35,7 @@ void Textbox::TextPosition()
 	{
 		cursorPosition = 0;
 	}
-	//Position.X+(Size.X-Graphics::textwidth((char *)ButtonText.c_str()))/2, Position.Y+(Size.Y-10)/2
-	switch(textVAlign)
-	{
-	case AlignTop:
-		textPosition.Y = 3;
-		break;
-	case AlignMiddle:
-		textPosition.Y = (Size.Y-10)/2;
-		break;
-	case AlignBottom:
-		textPosition.Y = Size.Y-11;
-		break;
-	}
-
-	switch(textHAlign)
-	{
-	case AlignLeft:
-		textPosition.X = 3;
-		break;
-	case AlignCentre:
-		textPosition.X = (Size.X-Graphics::textwidth((char *)displayText.c_str()))/2;
-		break;
-	case AlignRight:
-		textPosition.X = (Size.X-Graphics::textwidth((char *)displayText.c_str()))-2;
-		break;
-	}
+	Component::TextPosition(displayText);
 }
 
 void Textbox::SetText(std::string text)
@@ -141,7 +111,6 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 			if(cursor == text.length())
 			{
 				text += character;
-				//std::cout << key << std::endl;
 			}
 			else
 			{
@@ -177,6 +146,11 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 
 void Textbox::Draw(const Point& screenPos)
 {
+	if(!drawn)
+	{
+		TextPosition();
+		drawn = true;
+	}
 	Graphics * g = Engine::Ref().g;
 	if(IsFocused())
 	{
@@ -188,4 +162,6 @@ void Textbox::Draw(const Point& screenPos)
 		if(border) g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 160, 160, 160, 255);
 	}
 	g->drawtext(screenPos.X+textPosition.X, screenPos.Y+textPosition.Y, displayText, 255, 255, 255, 255);
+	if(Appearance.icon)
+		g->draw_icon(screenPos.X+iconPosition.X, screenPos.Y+iconPosition.Y, Appearance.icon);
 }

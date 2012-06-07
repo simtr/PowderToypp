@@ -1,11 +1,12 @@
 #include "SearchModel.h"
-#include "Save.h"
+#include "client/SaveInfo.h"
 
 #include "client/Client.h"
 
 SearchModel::SearchModel():
 	currentSort("best"),
 	showOwn(false),
+	showFavourite(false),
 	loadedSave(NULL),
 	updateSaveListWorking(false),
 	updateSaveListFinished(false),
@@ -22,7 +23,12 @@ void * SearchModel::updateSaveListTHelper(void * obj)
 
 void * SearchModel::updateSaveListT()
 {
-	vector<Save*> * tempSaveList = Client::Ref().SearchSaves((currentPage-1)*20, 20, lastQuery, currentSort=="new"?"date":"votes", showOwn, resultCount);
+	std::string category = "";
+	if(showFavourite)
+		category = "Favourites";
+	if(showOwn && Client::Ref().GetAuthUser().ID)
+		category = "by:"+Client::Ref().GetAuthUser().Username;
+	vector<SaveInfo*> * tempSaveList = Client::Ref().SearchSaves((currentPage-1)*20, 20, lastQuery, currentSort=="new"?"date":"votes", category, resultCount);
 	updateSaveListFinished = true;
 	return tempSaveList;
 }
@@ -49,16 +55,16 @@ void SearchModel::UpdateSaveList(int pageNumber, std::string query)
 	}
 }
 
-void SearchModel::SetLoadedSave(Save * save)
+void SearchModel::SetLoadedSave(SaveInfo * save)
 {
 	loadedSave = save;
 }
 
-Save * SearchModel::GetLoadedSave(){
+SaveInfo * SearchModel::GetLoadedSave(){
 	return loadedSave;
 }
 
-vector<Save*> SearchModel::GetSaveList()
+vector<SaveInfo*> SearchModel::GetSaveList()
 {
 	return saveList;
 }
@@ -72,7 +78,7 @@ void SearchModel::Update()
 			updateSaveListWorking = false;
 			lastError = "";
 			saveListLoaded = true;
-			vector<Save*> * tempSaveList;
+			vector<SaveInfo*> * tempSaveList;
 			pthread_join(updateSaveListThread, (void**)(&tempSaveList));
 			saveList = *tempSaveList;
 			delete tempSaveList;
@@ -154,6 +160,15 @@ void SearchModel::notifySortChanged()
 }
 
 void SearchModel::notifyShowOwnChanged()
+{
+	for(int i = 0; i < observers.size(); i++)
+	{
+		SearchView* cObserver = observers[i];
+		cObserver->NotifyShowOwnChanged(this);
+	}
+}
+
+void SearchModel::notifyShowFavouriteChanged()
 {
 	for(int i = 0; i < observers.size(); i++)
 	{

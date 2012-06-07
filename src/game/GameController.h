@@ -12,9 +12,10 @@
 #include "ssave/SSaveController.h"
 #include "tags/TagsController.h"
 #include "console/ConsoleController.h"
-#include "stamps/StampsController.h"
+#include "localbrowser/LocalBrowserController.h"
 //#include "cat/TPTScriptInterface.h"
 #include "cat/LuaScriptInterface.h"
+#include "options/OptionsController.h"
 #include "Menu.h"
 
 using namespace std;
@@ -35,7 +36,8 @@ private:
 	SSaveController * ssave;
 	ConsoleController * console;
 	TagsController * tagsWindow;
-	StampsController * stamps;
+	LocalBrowserController * localBrowser;
+	OptionsController * options;
 	CommandInterface * commandInterface;
 public:
 	class LoginCallback;
@@ -44,6 +46,7 @@ public:
 	class SSaveCallback;
 	class TagsCallback;
 	class StampsCallback;
+	class OptionsCallback;
 	GameController();
 	~GameController();
 	GameView * GetView();
@@ -60,6 +63,7 @@ public:
 	void SetZoomPosition(ui::Point position);
 	void AdjustBrushSize(int direction, bool logarithmic = false);
 	void AdjustZoomSize(int direction, bool logarithmic = false);
+	void ToolClick(int toolSelection, ui::Point point);
 	void DrawPoints(int toolSelection, queue<ui::Point*> & pointQueue);
 	void DrawRect(int toolSelection, ui::Point point1, ui::Point point2);
 	void DrawLine(int toolSelection, ui::Point point1, ui::Point point2);
@@ -77,7 +81,7 @@ public:
 	void OpenSearch();
 	void OpenLogin();
 	void OpenTags();
-	void OpenDisplayOptions();
+	void OpenOptions();
 	void OpenRenderOptions();
 	void OpenSaveWindow();
 	void OpenStamps();
@@ -90,6 +94,7 @@ public:
 	void ShowConsole();
 	void FrameStep();
 	ui::Point PointTranslate(ui::Point point);
+	std::string ElementResolve(int type);
 };
 
 #endif // GAMECONTROLLER_H

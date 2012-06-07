@@ -8,15 +8,24 @@
 #ifndef SIMULATION_H_
 #define SIMULATION_H_
 #include <cstring>
+#include <cstddef>
 #include "Config.h"
 #include "Renderer.h"
 #include "Graphics.h"
-#include "Elements.h"
+//#include "Elements.h"
+#include "Tools.h"
 #include "Misc.h"
 #include "game/Brush.h"
 #include "Gravity.h"
 #include "SimulationData.h"
-//#include "ElementFunctions.h"
+#include "Sign.h"
+#include "Particle.h"
+#include "StorageClasses.h"
+#include "Player.h"
+#include "WallType.h"
+#include "GOLMenu.h"
+#include "MenuSection.h"
+#include "client/GameSave.h"
 
 #define CHANNELS ((int)(MAX_TEMP-73)/100+2)
 
@@ -24,111 +33,7 @@ class Simulation;
 class Renderer;
 class Gravity;
 class Air;
-
-struct Particle
-{
-	int type;
-	int life, ctype;
-	float x, y, vx, vy;
-	float temp;
-	float pavg[2];
-	int flags;
-	int tmp;
-	int tmp2;
-	unsigned int dcolour;
-};
-typedef struct Particle Particle;
-
-struct part_type
-{
-	char *name;
-	pixel pcolors;
-	float advection;
-	float airdrag;
-	float airloss;
-	float loss;
-	float collision;
-	float gravity;
-	float diffusion;
-	float hotair;
-	int falldown;
-	int flammable;
-	int explosive;
-	int meltable;
-	int hardness;
-	int menu;
-	int enabled;
-	int weight;
-	int menusection;
-	float heat;
-	unsigned char hconduct;
-	char *descs;
-	char state;
-	unsigned int properties;
-	int (*update_func) (UPDATE_FUNC_ARGS);
-	int (*graphics_func) (GRAPHICS_FUNC_ARGS);
-};
-typedef struct part_type part_type;
-
-struct part_transition
-{
-	float plv; // transition occurs if pv is lower than this
-	int plt;
-	float phv; // transition occurs if pv is higher than this
-	int pht;
-	float tlv; // transition occurs if t is lower than this
-	int tlt;
-	float thv; // transition occurs if t is higher than this
-	int tht;
-};
-typedef struct part_transition part_transition;
-
-
-struct wall_type
-{
-	pixel colour;
-	pixel eglow; // if emap set, add this to fire glow
-	int drawstyle;
-	const char *descs;
-};
-typedef struct wall_type wall_type;
-
-struct gol_menu
-{
-	const char *name;
-	pixel colour;
-	int goltype;
-	const char *description;
-};
-typedef struct gol_menu gol_menu;
-
-struct menu_section
-{
-	char *icon;
-	const char *name;
-	int itemcount;
-	int doshow;
-};
-typedef struct menu_section menu_section;
-
-struct sign
-{
-	int x,y,ju;
-	char text[256];
-};
-typedef struct sign sign;
-
-struct playerst
-{
-	char comm;           //command cell
-	char pcomm;          //previous command
-	int elem;            //element power
-	float legs[16];      //legs' positions
-	float accs[8];       //accelerations
-	char spwn;           //if stick man was spawned
-	unsigned int frames; //frames since last particle spawn - used when spawning LIGH
-};
-typedef struct playerst playerst;
+class GameSave;
 
 //#ifdef _cplusplus
 class Simulation
@@ -139,8 +44,10 @@ public:
 	Gravity * grav;
 	Air * air;
 
-	part_type ptypes[PT_NUM];
-	part_transition ptransitions[PT_NUM];
+	vector<sign> signs;
+	Element * elements;
+	vector<SimTool*> tools;
+	unsigned int * platent;
 	wall_type wtypes[UI_WALLCOUNT];
 	gol_menu gmenu[NGOL];
 	int goltype[NGOL];
@@ -164,7 +71,6 @@ public:
 	int NUM_PARTS;
 	int elementCount[PT_NUM];
 	int ISWIRE;
-	sign * signs;
 	//Gol sim
 	int CGOL;
 	int ISGOL;
@@ -192,7 +98,7 @@ public:
 	int photons[YRES][XRES];
 	//
 	int gravityMode;
-	int airMode;
+	//int airMode;
 	int ngrav_enable;
 	int legacy_enable;
 	int aheat_enable;
@@ -206,10 +112,11 @@ public:
 	int sandcolour_g;
 	int sandcolour_b; //TODO: Make a single variable
 
-	int Load(unsigned char * data, int dataLength);
-	int Load(int x, int y, unsigned char * data, int dataLength);
-	unsigned char * Save(int & dataLength);
-	unsigned char * Save(int x1, int y1, int x2, int y2, int & dataLength);
+	int Load(GameSave * save);
+	int Load(int x, int y, GameSave * save);
+	GameSave * Save();
+	GameSave * Save(int x1, int y1, int x2, int y2);
+	Particle Get(int x, int y);
 	inline int is_blocking(int t, int x, int y);
 	inline int is_boundary(int pt, int x, int y);
 	inline int find_next_boundary(int pt, int *x, int *y, int dm, int *em);
@@ -223,8 +130,8 @@ public:
 	void create_cherenkov_photon(int pp);
 	void create_gain_photon(int pp);
 	inline void kill_part(int i);
-	int flood_prop(int x, int y, size_t propoffset, void * propvalue, int proptype);
-	int flood_prop_2(int x, int y, size_t propoffset, void * propvalue, int proptype, int parttype, char * bitmap);
+	int flood_prop(int x, int y, size_t propoffset, void * propvalue, StructProperty::PropertyType proptype);
+	int flood_prop_2(int x, int y, size_t propoffset, void * propvalue, StructProperty::PropertyType proptype, int parttype, char * bitmap);
 	int flood_water(int x, int y, int i, int originaly, int check);
 	inline void detach(int i);
 	inline void part_change_type(int i, int x, int y, int t);
@@ -243,14 +150,31 @@ public:
 	void update_particles();
 	void rotate_area(int area_x, int area_y, int area_w, int area_h, int invert);
 	void clear_area(int area_x, int area_y, int area_w, int area_h);
-	void create_box(int x1, int y1, int x2, int y2, int c, int flags);
-	int flood_parts(int x, int y, int c, int cm, int bm, int flags);
-	int create_parts(int x, int y, int rx, int ry, int c, int flags, Brush * cBrush = NULL);
-	void create_line(int x1, int y1, int x2, int y2, int rx, int ry, int c, int flags, Brush * cBrush = NULL);
+
+	int Tool(int x, int y, int tool, float strength);
+	int ToolBrush(int x, int y, int tool, Brush * cBrush);
+	void ToolLine(int x1, int y1, int x2, int y2, int tool, Brush * cBrush);
+	void ToolBox(int x1, int y1, int x2, int y2, int tool, Brush * cBrush);
+	
+	void CreateBox(int x1, int y1, int x2, int y2, int c, int flags);
+	int FloodParts(int x, int y, int c, int cm, int bm, int flags);
+	//Create particles from brush/mask
+	int CreateParts(int positionX, int positionY, int c, Brush * cBrush);
+	//Old particle creation, will create a crappy square, do not use
+	int CreateParts(int x, int y, int rx, int ry, int c, int flags);
+	void CreateLine(int x1, int y1, int x2, int y2, int c, Brush * cBrush);
+	void CreateLine(int x1, int y1, int x2, int y2, int rx, int ry, int c, int flags);
+	
+	void CreateWallBox(int x1, int y1, int x2, int y2, int c, int flags);
+	int FloodWalls(int x, int y, int c, int cm, int bm, int flags);
+	int CreateWalls(int x, int y, int rx, int ry, int c, int flags, Brush * cBrush = NULL);
+	void CreateWallLine(int x1, int y1, int x2, int y2, int rx, int ry, int c, int flags, Brush * cBrush = NULL);
+	
 	void ApplyDecoration(int x, int y, int colR, int colG, int colB, int colA, int mode);
 	void ApplyDecorationPoint(int x, int y, int rx, int ry, int colR, int colG, int colB, int colA, int mode, Brush * cBrush = NULL);
 	void ApplyDecorationLine(int x1, int y1, int x2, int y2, int rx, int ry, int colR, int colG, int colB, int colA, int mode, Brush * cBrush = NULL);
 	void ApplyDecorationBox(int x1, int y1, int x2, int y2, int colR, int colG, int colB, int colA, int mode);
+	
 	void *transform_save(void *odata, int *size, matrix2d transform, vector2d translate);
 	inline void orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[]);
 	inline void orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[]);

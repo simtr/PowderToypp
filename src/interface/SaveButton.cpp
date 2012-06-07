@@ -1,17 +1,17 @@
 #include <iostream>
 
 #include "SaveButton.h"
-#include "search/Save.h"
+#include "client/SaveInfo.h"
 #include "Graphics.h"
-#include "Global.h"
 #include "Engine.h"
 #include "client/Client.h"
 #include "simulation/SaveRenderer.h"
 
 namespace ui {
 
-SaveButton::SaveButton(Point position, Point size, Save * save):
+SaveButton::SaveButton(Point position, Point size, SaveInfo * save):
 	Component(position, size),
+	file(NULL),
 	save(save),
 	thumbnail(NULL),
 	isMouseInside(false),
@@ -21,21 +21,58 @@ SaveButton::SaveButton(Point position, Point size, Save * save):
 	selectable(false),
 	selected(false)
 {
-	if(save->votesUp==0)
-		voteRatio = 0.0f;
-	else if(save->votesDown==0)
-		voteRatio = 1.0f;
-	else
-		voteRatio = 1.0f-(float)(((float)(save->votesDown))/((float)(save->votesUp)));
-	if(voteRatio < 0.0f)
-		voteRatio = 0.0f;
-	if(voteRatio > 1.0f)	//Not possible, but just in case the server were to give a negative value or something
-		voteRatio = 1.0f;
+	if(save)
+	{
+		if(save->votesUp==0)
+			voteRatio = 0.0f;
+		else if(save->votesDown==0)
+			voteRatio = 1.0f;
+		else
+			voteRatio = 1.0f-(float)(((float)(save->votesDown))/((float)(save->votesUp)));
+		if(voteRatio < 0.0f)
+			voteRatio = 0.0f;
+		if(voteRatio > 1.0f)	//Not possible, but just in case the server were to give a negative value or something
+			voteRatio = 1.0f;
 
 
-	voteColour.Red = (1.0f-voteRatio)*255;
-	voteColour.Green = voteRatio*255;
+		voteColour.Red = (1.0f-voteRatio)*255;
+		voteColour.Green = voteRatio*255;
+	}
 
+	if(save)
+	{
+		name = save->name;
+		if(Graphics::textwidth((char *)name.c_str()) > Size.X)
+		{
+			int position = Graphics::textwidthx((char *)name.c_str(), Size.X - 22);
+			name = name.erase(position, name.length()-position);
+			name += "...";
+		}
+	}
+}
+
+SaveButton::SaveButton(Point position, Point size, SaveFile * file):
+	Component(position, size),
+	save(NULL),
+	file(file),
+	thumbnail(NULL),
+	isMouseInside(false),
+	isButtonDown(false),
+	actionCallback(NULL),
+	voteColour(255, 0, 0),
+	selectable(false),
+	selected(false)
+{
+	if(file)
+	{
+		name = file->GetName();
+		if(Graphics::textwidth((char *)name.c_str()) > Size.X)
+		{
+			int position = Graphics::textwidthx((char *)name.c_str(), Size.X - 22);
+			name = name.erase(position, name.length()-position);
+			name += "...";
+		}
+	}
 }
 
 SaveButton::~SaveButton()
@@ -46,6 +83,8 @@ SaveButton::~SaveButton()
 		delete actionCallback;
 	if(save)
 		delete save;
+	if(file)
+		delete file;
 }
 
 void SaveButton::Tick(float dt)
@@ -54,17 +93,35 @@ void SaveButton::Tick(float dt)
 	float scaleFactorY = 1.0f, scaleFactorX = 1.0f;
 	if(!thumbnail)
 	{
-		if(save->GetID())
+		if(save)
 		{
-			tempThumb = Client::Ref().GetThumbnail(save->GetID(), 0);
-			if(tempThumb)
+			if(!save->GetGameSave() && save->GetID())
 			{
-				thumbnail = new Thumbnail(*tempThumb); //Store a local copy of the thumbnail
+				tempThumb = Client::Ref().GetThumbnail(save->GetID(), 0);
+				if(tempThumb)
+				{
+					thumbnail = new Thumbnail(*tempThumb); //Store a local copy of the thumbnail
+				}
+			}
+			else if(save->GetGameSave())
+			{
+				thumbnail = SaveRenderer::Ref().Render(save->GetGameSave());
+			}
+			else
+			{
+				thumbnail = NULL;
 			}
 		}
-		else
+		if(file)
 		{
-			thumbnail = SaveRenderer::Ref().Render(save->GetData(), save->GetDataLength());
+			if(file->GetGameSave())
+			{
+				thumbnail = SaveRenderer::Ref().Render(file->GetGameSave());
+			}
+			else
+			{
+				thumbnail = NULL;
+			}
 		}
 		if(thumbnail && thumbnail->Data)
 		{
@@ -103,7 +160,7 @@ void SaveButton::Draw(const Point& screenPos)
 	if(thumbnail)
 	{
 		thumbBoxSize = ui::Point(thumbnail->Size.X, thumbnail->Size.Y);
-		if(save->id)
+		if(save && save->id)
 			g->draw_image(thumbnail->Data, screenPos.X-3+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbnail->Size.X, thumbnail->Size.Y, 255);
 		else
 			g->draw_image(thumbnail->Data, screenPos.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbnail->Size.X, thumbnail->Size.Y, 255);
@@ -113,35 +170,54 @@ void SaveButton::Draw(const Point& screenPos)
 		scaleFactor = (Size.Y-25)/((float)YRES);
 		thumbBoxSize = ui::Point(((float)XRES)*scaleFactor, ((float)YRES)*scaleFactor);
 	}
-	if(save->id)
+	if(save)
 	{
-		if(isMouseInside)
-			g->drawrect(screenPos.X-3+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 210, 230, 255, 255);
-		else
-			g->drawrect(screenPos.X-3+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 180, 180, 180, 255);
-		g->drawrect(screenPos.X-3+thumbBoxSize.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, 6, thumbBoxSize.Y, 180, 180, 180, 255);
+		if(save->id)
+		{
+			if(isMouseInside)
+				g->drawrect(screenPos.X-3+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 210, 230, 255, 255);
+			else
+				g->drawrect(screenPos.X-3+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 180, 180, 180, 255);
+			g->drawrect(screenPos.X-4+thumbBoxSize.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, 7, thumbBoxSize.Y, 180, 180, 180, 255);
 
-		int voteBar = max(10.0f, ((float)(thumbBoxSize.Y-2))*voteRatio);
-		g->fillrect(1+screenPos.X-3+thumbBoxSize.X+(Size.X-thumbBoxSize.X)/2, 1+(screenPos.Y-2)+(thumbBoxSize.Y-voteBar)+(Size.Y-21-thumbBoxSize.Y)/2, 4, voteBar, voteColour.Red, voteColour.Green, voteColour.Blue, 255);
+			int voteBar = max(10.0f, ((float)(thumbBoxSize.Y-4))*voteRatio);
+			g->fillrect(1+screenPos.X-3+thumbBoxSize.X+(Size.X-thumbBoxSize.X)/2, (screenPos.Y-2)+(thumbBoxSize.Y-voteBar)+(Size.Y-21-thumbBoxSize.Y)/2, 3, voteBar, voteColour.Red, voteColour.Green, voteColour.Blue, 255);
+		}
+		else
+		{
+			if(isMouseInside)
+				g->drawrect(screenPos.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 210, 230, 255, 255);
+			else
+				g->drawrect(screenPos.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 180, 180, 180, 255);
+		}
+
+		if(isMouseInside)
+		{
+			//g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 255, 255, 255, 255);
+			g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)name.c_str()))/2, screenPos.Y+Size.Y - 21, name, 255, 255, 255, 255);
+			g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->userName.c_str()))/2, screenPos.Y+Size.Y - 10, save->userName, 200, 230, 255, 255);
+		}
+		else
+		{
+			g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)name.c_str()))/2, screenPos.Y+Size.Y - 21, name, 180, 180, 180, 255);
+			g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->userName.c_str()))/2, screenPos.Y+Size.Y - 10, save->userName, 100, 130, 160, 255);
+		}
 	}
-	else
+	if(file)
 	{
 		if(isMouseInside)
 			g->drawrect(screenPos.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 210, 230, 255, 255);
 		else
 			g->drawrect(screenPos.X+(Size.X-thumbBoxSize.X)/2, screenPos.Y+(Size.Y-21-thumbBoxSize.Y)/2, thumbBoxSize.X, thumbBoxSize.Y, 180, 180, 180, 255);
-	}
 
-	if(isMouseInside)
-	{
-		//g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 255, 255, 255, 255);
-		g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->name.c_str()))/2, screenPos.Y+Size.Y - 21, save->name, 255, 255, 255, 255);
-		g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->userName.c_str()))/2, screenPos.Y+Size.Y - 10, save->userName, 200, 230, 255, 255);
-	}
-	else
-	{
-		g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->name.c_str()))/2, screenPos.Y+Size.Y - 21, save->name, 180, 180, 180, 255);
-		g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)save->userName.c_str()))/2, screenPos.Y+Size.Y - 10, save->userName, 100, 130, 160, 255);
+		if(isMouseInside)
+		{
+			g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)name.c_str()))/2, screenPos.Y+Size.Y - 21, name, 255, 255, 255, 255);
+		}
+		else
+		{
+			g->drawtext(screenPos.X+(Size.X-Graphics::textwidth((char *)name.c_str()))/2, screenPos.Y+Size.Y - 21, name, 180, 180, 180, 255);
+		}
 	}
 
 	if(isMouseInside && selectable)

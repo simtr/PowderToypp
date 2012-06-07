@@ -16,10 +16,10 @@
 #endif
 
 //VersionInfoStart
-#define SAVE_VERSION 71
-#define MINOR_VERSION 0
+#define SAVE_VERSION 76
+#define MINOR_VERSION 1
 #define BETA
-#define BUILD_NUM 133
+#define BUILD_NUM 155
 //VersionInfoEnd
 
 #ifdef BETA
@@ -88,7 +88,7 @@
 #define XCNTR   306
 #define YCNTR   192
 
-#define MAX_DISTANCE sqrt(pow(XRES, 2)+pow(YRES, 2))
+#define MAX_DISTANCE sqrt(pow((float)XRES, 2)+pow((float)YRES, 2))
 
 #define GRAV_DIFF
 

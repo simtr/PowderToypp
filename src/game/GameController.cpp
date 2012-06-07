@@ -4,7 +4,7 @@
 #include "Config.h"
 #include "GameController.h"
 #include "GameModel.h"
-#include "search/Save.h"
+#include "client/SaveInfo.h"
 #include "search/SearchController.h"
 #include "render/RenderController.h"
 #include "login/LoginController.h"
@@ -37,7 +37,7 @@ public:
 		{
 			try
 			{
-				cc->gameModel->SetSave(new Save(*(cc->search->GetLoadedSave())));
+				cc->gameModel->SetSave(new SaveInfo(*(cc->search->GetLoadedSave())));
 			}
 			catch(GameModelException & ex)
 			{
@@ -59,6 +59,17 @@ public:
 	}
 };
 
+class GameController::OptionsCallback: public ControllerCallback
+{
+	GameController * cc;
+public:
+	OptionsCallback(GameController * cc_) { cc = cc_; }
+	virtual void ControllerExit()
+	{
+		//cc->gameModel->SetUser(cc->loginWindow->GetUser());
+	}
+};
+
 class GameController::SSaveCallback: public ControllerCallback
 {
 	GameController * cc;
@@ -68,7 +79,7 @@ public:
 	{
 		if(cc->ssave->GetSaveUploaded())
 		{
-			cc->gameModel->SetSave(new Save(*(cc->ssave->GetSave())));
+			cc->gameModel->SetSave(new SaveInfo(*(cc->ssave->GetSave())));
 
 		}
 		//cc->gameModel->SetUser(cc->loginWindow->GetUser());
@@ -82,7 +93,7 @@ public:
 	TagsCallback(GameController * cc_) { cc = cc_; }
 	virtual void ControllerExit()
 	{
-		cc->gameModel->SetSave(new Save(*(cc->tagsWindow->GetSave())));
+		cc->gameModel->SetSave(new SaveInfo(*(cc->tagsWindow->GetSave())));
 	}
 };
 
@@ -93,9 +104,9 @@ public:
 	StampsCallback(GameController * cc_) { cc = cc_; }
 	virtual void ControllerExit()
 	{
-		if(cc->stamps->GetStamp())
+		if(cc->localBrowser->GetSave())
 		{
-			cc->gameModel->SetStamp(cc->stamps->GetStamp());
+			cc->gameModel->SetStamp(cc->localBrowser->GetSave()->GetGameSave());
 		}
 		else
 			cc->gameModel->SetStamp(NULL);
@@ -108,7 +119,8 @@ GameController::GameController():
 		loginWindow(NULL),
 		ssave(NULL),
 		console(NULL),
-		tagsWindow(NULL)
+		tagsWindow(NULL),
+		options(NULL)
 {
 	gameView = new GameView();
 	gameModel = new GameModel();
@@ -160,7 +172,7 @@ void GameController::PlaceStamp(ui::Point position)
 {
 	if(gameModel->GetStamp())
 	{
-		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetStamp()->data, gameModel->GetStamp()->dataLength);
+		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetStamp());
 		gameModel->SetPaused(gameModel->GetPaused());
 	}
 }
@@ -169,7 +181,7 @@ void GameController::PlaceClipboard(ui::Point position)
 {
 	if(gameModel->GetClipboard())
 	{
-		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetClipboard()->data, gameModel->GetClipboard()->dataLength);
+		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetClipboard());
 		gameModel->SetPaused(gameModel->GetPaused());
 	}
 }
@@ -229,7 +241,7 @@ void GameController::DrawRect(int toolSelection, ui::Point point1, ui::Point poi
 	Brush * cBrush = gameModel->GetBrush();
 	if(!activeTool || !cBrush)
 		return;
-	activeTool->DrawRect(sim, cBrush, point1, point2);
+	activeTool->DrawRect(sim, cBrush, PointTranslate(point1), PointTranslate(point2));
 }
 
 void GameController::DrawLine(int toolSelection, ui::Point point1, ui::Point point2)
@@ -239,7 +251,7 @@ void GameController::DrawLine(int toolSelection, ui::Point point1, ui::Point poi
 	Brush * cBrush = gameModel->GetBrush();
 	if(!activeTool || !cBrush)
 		return;
-	activeTool->DrawLine(sim, cBrush, point1, point2);
+	activeTool->DrawLine(sim, cBrush, PointTranslate(point1), PointTranslate(point2));
 }
 
 void GameController::DrawFill(int toolSelection, ui::Point point)
@@ -249,7 +261,7 @@ void GameController::DrawFill(int toolSelection, ui::Point point)
 	Brush * cBrush = gameModel->GetBrush();
 	if(!activeTool || !cBrush)
 		return;
-	activeTool->DrawFill(sim, cBrush, point);
+	activeTool->DrawFill(sim, cBrush, PointTranslate(point));
 }
 
 void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueue)
@@ -292,23 +304,32 @@ void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueu
 	}
 }
 
+void GameController::ToolClick(int toolSelection, ui::Point point)
+{
+	Simulation * sim = gameModel->GetSimulation();
+	Tool * activeTool = gameModel->GetActiveTool(toolSelection);
+	Brush * cBrush = gameModel->GetBrush();
+	if(!activeTool || !cBrush)
+		return;
+	activeTool->Click(sim, cBrush, PointTranslate(point));
+}
+
 void GameController::StampRegion(ui::Point point1, ui::Point point2)
 {
-	int saveSize;
-	unsigned char * saveData;
-	saveData = gameModel->GetSimulation()->Save(point1.X, point1.Y, point2.X, point2.Y, saveSize);
-	if(saveData && saveSize)
-		gameModel->AddStamp(saveData, saveSize);
+	GameSave * newSave;
+	newSave = gameModel->GetSimulation()->Save(point1.X, point1.Y, point2.X, point2.Y);
+	if(newSave)
+		gameModel->AddStamp(newSave);
+	else
+		new ErrorMessage("Could not create stamp", "Error generating save file");
 }
 
 void GameController::CopyRegion(ui::Point point1, ui::Point point2)
 {
-	int saveSize;
-	unsigned char * saveData;
-	saveData = gameModel->GetSimulation()->Save(point1.X, point1.Y, point2.X, point2.Y, saveSize);
-
-	if(saveData && saveSize)
-		gameModel->SetClipboard(saveData, saveSize);
+	GameSave * newSave;
+	newSave = gameModel->GetSimulation()->Save(point1.X, point1.Y, point2.X, point2.Y);
+	if(newSave)
+		gameModel->SetClipboard(newSave);
 }
 
 bool GameController::MouseMove(int x, int y, int dx, int dy)
@@ -348,6 +369,12 @@ void GameController::Tick()
 
 void GameController::Update()
 {
+	ui::Point pos = gameView->GetMousePosition();
+	if(pos.X >= 0 && pos.Y >= 0 && pos.X < XRES && pos.Y < YRES)
+	{
+		gameView->SetSample(gameModel->GetSimulation()->Get(pos.X, pos.Y));
+	}
+
 	gameModel->GetSimulation()->update_particles();
 	if(renderOptions && renderOptions->HasExited)
 	{
@@ -474,13 +501,15 @@ void GameController::OpenTags()
 
 void GameController::OpenStamps()
 {
-	stamps = new StampsController(new StampsCallback(this));
-	ui::Engine::Ref().ShowWindow(stamps->GetView());
+	localBrowser = new LocalBrowserController(new StampsCallback(this));
+	ui::Engine::Ref().ShowWindow(localBrowser->GetView());
 }
 
-void GameController::OpenDisplayOptions()
+void GameController::OpenOptions()
 {
-	//TODO: Implement
+	options = new OptionsController(gameModel->GetSimulation(), new OptionsCallback(this));
+	ui::Engine::Ref().ShowWindow(options->GetView());
+
 }
 
 void GameController::ShowConsole()
@@ -500,9 +529,8 @@ void GameController::OpenSaveWindow()
 {
 	if(gameModel->GetUser().ID)
 	{
-		int tempSaveLength;
-		unsigned char * tempData = gameModel->GetSimulation()->Save(tempSaveLength);
-		if(!tempData)
+		GameSave * gameSave = gameModel->GetSimulation()->Save();
+		if(!gameSave)
 		{
 			new ErrorMessage("Error", "Unable to build save.");
 		}
@@ -510,14 +538,14 @@ void GameController::OpenSaveWindow()
 		{
 			if(gameModel->GetSave())
 			{
-				Save tempSave(*gameModel->GetSave());
-				tempSave.SetData(tempData, tempSaveLength);
+				SaveInfo tempSave(*gameModel->GetSave());
+				tempSave.SetGameSave(gameSave);
 				ssave = new SSaveController(new SSaveCallback(this), tempSave);
 			}
 			else
-			{
-				Save tempSave(0, 0, 0, 0, gameModel->GetUser().Username, "");
-				tempSave.SetData(tempData, tempSaveLength);
+			{				
+				SaveInfo tempSave(0, 0, 0, 0, gameModel->GetUser().Username, "");
+				tempSave.SetGameSave(gameSave);
 				ssave = new SSaveController(new SSaveCallback(this), tempSave);
 			}
 			ui::Engine::Ref().ShowWindow(ssave->GetView());
@@ -554,8 +582,17 @@ void GameController::ClearSim()
 
 void GameController::ReloadSim()
 {
-	if(gameModel->GetSave() && gameModel->GetSave()->GetData())
-		gameModel->GetSimulation()->Load(gameModel->GetSave()->GetData(), gameModel->GetSave()->GetDataLength());
+	if(gameModel->GetSave() && gameModel->GetSave()->GetGameSave())
+	{
+		gameModel->GetSimulation()->Load(gameModel->GetSave()->GetGameSave());
+	}
 }
 
+std::string GameController::ElementResolve(int type)
+{
+	if(gameModel && gameModel->GetSimulation() && gameModel->GetSimulation()->elements && type >= 0 && type < PT_NUM)
+		return std::string(gameModel->GetSimulation()->elements[type].Name);
+	else
+		return "";
+}
 

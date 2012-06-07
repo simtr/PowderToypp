@@ -157,6 +157,11 @@ RenderView::RenderView():
 	colourModes.push_back(tCheckbox);
 	tCheckbox->SetActionCallback(new ColourModeAction(this, COLOUR_GRAD));
 	AddComponent(tCheckbox);
+
+	tCheckbox = new ui::Checkbox(ui::Point(536, YRES+4), ui::Point(50, 16), "Basic");
+	colourModes.push_back(tCheckbox);
+	tCheckbox->SetActionCallback(new ColourModeAction(this, COLOUR_BASC));
+	AddComponent(tCheckbox);
 }
 
 void RenderView::OnMouseDown(int x, int y, unsigned button)
@@ -234,9 +239,14 @@ void RenderView::OnDraw()
 	g->clearrect(0, 0, XRES, YRES+MENUSIZE);
 	if(ren)
 	{
+		ren->clearScreen(1.0f);
 		ren->draw_air();
 		ren->render_parts();
 		ren->render_fire();
+		ren->draw_grav();
+		ren->DrawWalls();
+		ren->DrawSigns();
+		ren->FinaliseParts();
 	}
 	g->draw_line(0, YRES, XRES-1, YRES, 255, 255, 255, XRES+BARSIZE);
 	g->draw_line(180, YRES, 180, YRES+MENUSIZE, 200, 200, 200, XRES+BARSIZE);

@@ -12,13 +12,15 @@
 ErrorMessage::ErrorMessage(std::string title, std::string message):
 	ui::Window(ui::Point(-1, -1), ui::Point(200, 75))
 {
-	ui::Label * titleLabel = new ui::Label(ui::Point(2, 1), ui::Point(Size.X-4, 16), title);
+	ui::Label * titleLabel = new ui::Label(ui::Point(4, 5), ui::Point(Size.X-8, 16), title);
 	titleLabel->SetTextColour(ui::Colour(200, 100, 50));
-	titleLabel->SetAlignment(AlignLeft, AlignBottom);
+	titleLabel->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
+	titleLabel->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
 	AddComponent(titleLabel);
 
-	ui::Label * messageLabel = new ui::Label(ui::Point(4, 18), ui::Point(Size.X-8, 60), message);
-	messageLabel->SetAlignment(AlignLeft, AlignTop);
+	ui::Label * messageLabel = new ui::Label(ui::Point(4, 24), ui::Point(Size.X-8, 60), message);
+	messageLabel->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
+	messageLabel->Appearance.VerticalAlign = ui::Appearance::AlignTop;
 	AddComponent(messageLabel);
 
 	class DismissAction: public ui::ButtonAction
@@ -29,13 +31,14 @@ ErrorMessage::ErrorMessage(std::string title, std::string message):
 		void ActionCallback(ui::Button * sender)
 		{
 			ui::Engine::Ref().CloseWindow();
-			//delete message; TODO: Fix component disposal
+			message->SelfDestruct(); //TODO: Fix component disposal
 		}
 	};
 
 	ui::Button * okayButton = new ui::Button(ui::Point(0, Size.Y-16), ui::Point(Size.X, 16), "Dismiss");
-	okayButton->SetAlignment(AlignRight, AlignBottom);
-	okayButton->SetBorderColour(ui::Colour(200, 200, 200));
+	okayButton->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
+	okayButton->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
+	okayButton->Appearance.BorderInactive = ui::Colour(200, 200, 200);
 	okayButton->SetActionCallback(new DismissAction(this));
 	AddComponent(okayButton);
 	ui::Engine::Ref().ShowWindow(this);

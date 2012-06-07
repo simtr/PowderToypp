@@ -6,6 +6,7 @@
 #include "SearchView.h"
 #include "interface/Panel.h"
 #include "dialogues/ConfirmPrompt.h"
+#include "dialogues/ErrorMessage.h"
 #include "preview/PreviewController.h"
 #include "client/Client.h"
 #include "tasks/Task.h"
@@ -20,7 +21,7 @@ public:
 	{
 		if(cc->activePreview->GetDoOpen() && cc->activePreview->GetSave())
 		{
-			cc->searchModel->SetLoadedSave(new Save(*(cc->activePreview->GetSave())));
+			cc->searchModel->SetLoadedSave(new SaveInfo(*(cc->activePreview->GetSave())));
 		}
 	}
 };
@@ -44,7 +45,7 @@ SearchController::SearchController(ControllerCallback * callback):
 	//windowPanel.AddChild();
 }
 
-Save * SearchController::GetLoadedSave()
+SaveInfo * SearchController::GetLoadedSave()
 {
 	return searchModel->GetLoadedSave();
 }
@@ -120,14 +121,31 @@ void SearchController::ChangeSort()
 	{
 		searchModel->SetSort("new");
 	}
+	searchModel->UpdateSaveList(1, searchModel->GetLastQuery());
 }
 
 void SearchController::ShowOwn(bool show)
 {
 	if(Client::Ref().GetAuthUser().ID)
+	{
+		searchModel->SetShowFavourite(false);
 		searchModel->SetShowOwn(show);
+	}
 	else
 		searchModel->SetShowOwn(false);
+	searchModel->UpdateSaveList(1, searchModel->GetLastQuery());
+}
+
+void SearchController::ShowFavourite(bool show)
+{
+	if(Client::Ref().GetAuthUser().ID)
+	{
+		searchModel->SetShowOwn(false);
+		searchModel->SetShowFavourite(show);
+	}
+	else
+		searchModel->SetShowFavourite(false);
+	searchModel->UpdateSaveList(1, searchModel->GetLastQuery());
 }
 
 void SearchController::Selected(int saveID, bool selected)
@@ -202,19 +220,90 @@ void SearchController::removeSelectedC()
 	std::vector<int> selected = searchModel->GetSelected();
 	new TaskWindow("Removing saves", new RemoveSavesTask(selected));
 	ClearSelection();
+	searchModel->UpdateSaveList(searchModel->GetPageNum(), searchModel->GetLastQuery());
 }
 
 void SearchController::UnpublishSelected()
 {
+	class UnpublishSelectedConfirmation: public ConfirmDialogueCallback {
+	public:
+		SearchController * c;
+		UnpublishSelectedConfirmation(SearchController * c_) {	c = c_;	}
+		virtual void ConfirmCallback(ConfirmPrompt::DialogueResult result) {
+			if (result == ConfirmPrompt::ResultOkay)
+				c->unpublishSelectedC();
+		}
+		virtual ~UnpublishSelectedConfirmation() { }
+	};
 
+	std::stringstream desc;
+	desc << "Are you sure you want to hide " << searchModel->GetSelected().size() << " save";
+	if(searchModel->GetSelected().size()>1)
+		desc << "s";
+	new ConfirmPrompt("Unpublish saves", desc.str(), new UnpublishSelectedConfirmation(this));
 }
 
 void SearchController::unpublishSelectedC()
 {
+	class UnpublishSavesTask : public Task
+	{
+		std::vector<int> saves;
+	public:
+		UnpublishSavesTask(std::vector<int> saves_) { saves = saves_; }
+		virtual void doWork()
+		{
+			for(int i = 0; i < saves.size(); i++)
+			{
+				std::stringstream saveID;
+				saveID << "Hiding save [" << saves[i] << "] ...";
+ 				notifyStatus(saveID.str());
+ 				if(Client::Ref().UnpublishSave(saves[i])!=RequestOkay)
+				{
+ 					std::stringstream saveIDF;
+ 					saveIDF << "\boFailed to hide [" << saves[i] << "] ...";
+					notifyStatus(saveIDF.str());
+					usleep(500*1000);
+				}
+				usleep(100*1000);
+				notifyProgress((float(i+1)/float(saves.size())*100));
+			}
+		}
+	};
+
+	std::vector<int> selected = searchModel->GetSelected();
+	new TaskWindow("Unpublishing saves", new UnpublishSavesTask(selected));
 	ClearSelection();
+	searchModel->UpdateSaveList(searchModel->GetPageNum(), searchModel->GetLastQuery());
 }
 
 void SearchController::FavouriteSelected()
 {
+	class FavouriteSavesTask : public Task
+	{
+		std::vector<int> saves;
+	public:
+		FavouriteSavesTask(std::vector<int> saves_) { saves = saves_; }
+		virtual void doWork()
+		{
+			for(int i = 0; i < saves.size(); i++)
+			{
+				std::stringstream saveID;
+				saveID << "Favouring save [" << saves[i] << "] ...";
+				notifyStatus(saveID.str());
+				if(Client::Ref().FavouriteSave(saves[i], true)!=RequestOkay)
+				{
+					std::stringstream saveIDF;
+					saveIDF << "\boFailed to favourite [" << saves[i] << "] ...";
+					notifyStatus(saveIDF.str());
+					usleep(500*1000);
+				}
+				usleep(100*1000);
+				notifyProgress((float(i+1)/float(saves.size())*100));
+			}
+		}
+	};
+
+	std::vector<int> selected = searchModel->GetSelected();
+	new TaskWindow("Favouring saves", new FavouriteSavesTask(selected));
 	ClearSelection();
 }

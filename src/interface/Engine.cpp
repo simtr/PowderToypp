@@ -1,9 +1,8 @@
 #include <iostream>
+#include <stack>
+#include <cstdio>
 
 #include "Config.h"
-#include <stack>
-
-#include "Global.h"
 #include "interface/Window.h"
 #include "interface/Platform.h"
 #include "interface/Engine.h"
@@ -75,7 +74,10 @@ void Engine::ShowWindow(Window * window)
 			prevBuffers.push(lastBuffer);
 		}
 		lastBuffer = (pixel*)malloc((width_ * height_) * PIXELSIZE);
+
+#ifndef OGLR
 		memcpy(lastBuffer, g->vid, (width_ * height_) * PIXELSIZE);
+#endif
 
 		windows.push(state_);
 	}
@@ -167,7 +169,10 @@ void Engine::Draw()
 {
 	if(lastBuffer && !(state_->Position.X == 0 && state_->Position.Y == 0 && state_->Size.X == width_ && state_->Size.Y == height_))
 	{
+		g->Clear();
+#ifndef OGLR
 		memcpy(g->vid, lastBuffer, (width_ * height_) * PIXELSIZE);
+#endif
 	}
 	else
 	{
@@ -179,7 +184,7 @@ void Engine::Draw()
 	char fpsText[512];
 	sprintf(fpsText, "FPS: %.2f, Delta: %.3f", fps, dt);
 	ui::Engine::Ref().g->drawtext(10, 10, fpsText, 255, 255, 255, 255);
-	g->Blit();
+	g->Finalise();
 }
 
 void Engine::SetFps(float fps)

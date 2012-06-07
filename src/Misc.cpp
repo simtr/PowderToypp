@@ -3,7 +3,7 @@
 #include <string.h>
 #include <regex.h>
 #include <sys/types.h>
-#include <math.h>
+#include <cmath>
 #include "Config.h"
 #include "Misc.h"
 #include "icondoc.h"
@@ -15,6 +15,7 @@
 #include <unistd.h>
 #endif
 #ifdef MACOSX
+#include <mach-o/dyld.h>
 #include <ApplicationServices/ApplicationServices.h>
 #endif
 
@@ -28,11 +29,11 @@ char *exe_name(void)
 	while ((res = GetModuleFileName(NULL, name, max)) >= max)
 	{
 #elif defined MACOSX
-	char *fn=malloc(64),*name=malloc(PATH_MAX);
+	char *fn=(char*)malloc(64),*name=(char*)malloc(PATH_MAX);
 	uint32_t max=64, res;
 	if (_NSGetExecutablePath(fn, &max) != 0)
 	{
-		fn = realloc(fn, max);
+		fn = (char*)realloc(fn, max);
 		_NSGetExecutablePath(fn, &max);
 	}
 	if (realpath(fn, name) == NULL)
@@ -74,7 +75,7 @@ int isign(float i) //TODO: INline or macro
 	return 0;
 }
 
-unsigned clamp_flt(float f, float min, float max) //TODO: Also inline/macro
+TPT_INLINE unsigned clamp_flt(float f, float min, float max) //TODO: Also inline/macro
 {
 	if (f<min)
 		return 0;
@@ -83,7 +84,7 @@ unsigned clamp_flt(float f, float min, float max) //TODO: Also inline/macro
 	return (int)(255.0f*(f-min)/(max-min));
 }
 
-float restrict_flt(float f, float min, float max) //TODO Inline or macro or something
+TPT_INLINE float restrict_flt(float f, float min, float max) //TODO Inline or macro or something
 {
 	if (f<min)
 		return min;
@@ -368,7 +369,7 @@ void clipboard_push_text(char * text)
 	if (PasteboardClear(newclipboard)!=noErr) return;
 	PasteboardSynchronize(newclipboard);
 
-	CFDataRef data = CFDataCreate(kCFAllocatorDefault, text, strlen(text));
+	CFDataRef data = CFDataCreate(kCFAllocatorDefault, (const UInt8*)text, strlen(text));
 	PasteboardPutItemFlavor(newclipboard, (PasteboardItemID)1, CFSTR("com.apple.traditional-mac-plain-text"), data, 0);
 #elif defined WIN32
 	if (OpenClipboard(NULL))
@@ -654,9 +655,9 @@ void OpenURI(std::string uri) {
 #ifdef WIN32
 	ShellExecute(0, "OPEN", uri.c_str(), NULL, NULL, 0);
 #elif MACOSX
-	char *cmd = malloc(7+uri.length());
+	char *cmd = (char*)malloc(7+uri.length());
 	strcpy(cmd, "open ");
-	strappend(cmd, uri.c_str());
+	strappend(cmd, (char*)uri.c_str());
 	system(cmd);
 #elif LIN32
 	char *cmd = (char*)malloc(11+uri.length());
@@ -664,9 +665,9 @@ void OpenURI(std::string uri) {
 	strappend(cmd, (char*)uri.c_str());
 	system(cmd);
 #elif LIN64
-	char *cmd = malloc(11+uri.length());
+	char *cmd = (char*)malloc(11+uri.length());
 	strcpy(cmd, "xdg-open ");
-	strappend(cmd, uri.c_str());
+	strappend(cmd, (char*)uri.c_str());
 	system(cmd);
 #else
 	printf("Cannot open browser\n");

@@ -1,4 +1,4 @@
-#include <math.h>
+#include <cmath>
 #include <sys/types.h>
 #include <pthread.h>
 #include "Config.h"
@@ -37,6 +37,7 @@ void Gravity::bilinear_interpolation(float *src, float *dst, int sw, int sh, int
 
 void Gravity::gravity_init()
 {
+	ngrav_enable = 0;
 	//Allocate full size Gravmaps
 	th_ogravmap = (float *)calloc((XRES/CELL)*(YRES/CELL), sizeof(float));
 	th_gravmap = (float *)calloc((XRES/CELL)*(YRES/CELL), sizeof(float));
@@ -210,16 +211,16 @@ void Gravity::grav_fft_init()
 	if (grav_fft_status) return;
 
 	//use fftw malloc function to ensure arrays are aligned, to get better performance
-	th_ptgravx = fftwf_malloc(xblock2*yblock2*sizeof(float));
-	th_ptgravy = fftwf_malloc(xblock2*yblock2*sizeof(float));
-	th_ptgravxt = fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
-	th_ptgravyt = fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
-	th_gravmapbig = fftwf_malloc(xblock2*yblock2*sizeof(float));
-	th_gravmapbigt = fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
-	th_gravxbig = fftwf_malloc(xblock2*yblock2*sizeof(float));
-	th_gravybig = fftwf_malloc(xblock2*yblock2*sizeof(float));
-	th_gravxbigt = fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
-	th_gravybigt = fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
+	th_ptgravx = (float*)fftwf_malloc(xblock2*yblock2*sizeof(float));
+	th_ptgravy = (float*)fftwf_malloc(xblock2*yblock2*sizeof(float));
+	th_ptgravxt = (fftwf_complex*)fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
+	th_ptgravyt = (fftwf_complex*)fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
+	th_gravmapbig = (float*)fftwf_malloc(xblock2*yblock2*sizeof(float));
+	th_gravmapbigt = (fftwf_complex*)fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
+	th_gravxbig = (float*)fftwf_malloc(xblock2*yblock2*sizeof(float));
+	th_gravybig = (float*)fftwf_malloc(xblock2*yblock2*sizeof(float));
+	th_gravxbigt = (fftwf_complex*)fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
+	th_gravybigt = (fftwf_complex*)fftwf_malloc(fft_tsize*sizeof(fftwf_complex));
 
 	//select best algorithm, could use FFTW_PATIENT or FFTW_EXHAUSTIVE but that increases the time taken to plan, and I don't see much increase in execution speed
 	plan_ptgravx = fftwf_plan_dft_r2c_2d(yblock2, xblock2, th_ptgravx, th_ptgravxt, FFTW_MEASURE);
@@ -236,9 +237,9 @@ void Gravity::grav_fft_init()
 		for (x=0; x<xblock2; x++)
 		{
 			if (x==XRES/CELL && y==YRES/CELL) continue;
-			distance = sqrtf(pow(x-(XRES/CELL), 2) + pow(y-(YRES/CELL), 2));
-			th_ptgravx[y*xblock2+x] = scaleFactor*(x-(XRES/CELL)) / pow(distance, 3);
-			th_ptgravy[y*xblock2+x] = scaleFactor*(y-(YRES/CELL)) / pow(distance, 3);
+			distance = sqrtf(pow(x-(XRES/CELL), 2.0f) + pow(y-(YRES/CELL), 2.0f));
+			th_ptgravx[y*xblock2+x] = scaleFactor*(x-(XRES/CELL)) / pow(distance, 3.0f);
+			th_ptgravy[y*xblock2+x] = scaleFactor*(y-(YRES/CELL)) / pow(distance, 3.0f);
 		}
 	}
 	th_ptgravx[yblock2*xblock2/2+xblock2/2] = 0.0f;
@@ -387,15 +388,15 @@ void Gravity::update_grav(void)
 					for (x = 0; x < XRES / CELL; x++) {
 						if (x == j && y == i)//Ensure it doesn't calculate with itself
 							continue;
-						distance = sqrt(pow(j - x, 2) + pow(i - y, 2));
+						distance = sqrt(pow(j - x, 2.0f) + pow(i - y, 2.0f));
 #ifdef GRAV_DIFF
 						val = th_gravmap[i*(XRES/CELL)+j] - th_ogravmap[i*(XRES/CELL)+j];
 #else
 						val = th_gravmap[i*(XRES/CELL)+j];
 #endif
-						th_gravx[y*(XRES/CELL)+x] += M_GRAV * val * (j - x) / pow(distance, 3);
-						th_gravy[y*(XRES/CELL)+x] += M_GRAV * val * (i - y) / pow(distance, 3);
-						th_gravp[y*(XRES/CELL)+x] += M_GRAV * val / pow(distance, 2);
+						th_gravx[y*(XRES/CELL)+x] += M_GRAV * val * (j - x) / pow(distance, 3.0f);
+						th_gravy[y*(XRES/CELL)+x] += M_GRAV * val * (i - y) / pow(distance, 3.0f);
+						th_gravp[y*(XRES/CELL)+x] += M_GRAV * val / pow(distance, 2.0f);
 					}
 				}
 			}

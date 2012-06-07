@@ -6,7 +6,7 @@
 #include "SearchView.h"
 #include "preview/PreviewController.h"
 #include "Controller.h"
-#include "Save.h"
+#include "client/SaveInfo.h"
 
 class SearchView;
 class SearchModel;
@@ -35,6 +35,7 @@ public:
 	void PrevPage();
 	void ChangeSort();
 	void ShowOwn(bool show);
+	void ShowFavourite(bool show);
 	void Selected(int saveID, bool selected);
 	void OpenSave(int saveID);
 	void Update();
@@ -42,7 +43,7 @@ public:
 	void RemoveSelected();
 	void UnpublishSelected();
 	void FavouriteSelected();
-	Save * GetLoadedSave();
+	SaveInfo * GetLoadedSave();
 };
 
 #endif // SEARCHCONTROLLER_H

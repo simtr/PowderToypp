@@ -5,19 +5,231 @@
  *      Author: Simon
  */
 
-#include <math.h>
+#include <cmath>
 #include <iostream>
 #include <vector>
+#include <stdio.h>
+#include <stdlib.h>
 #include "Config.h"
 #include "Renderer.h"
 #include "Graphics.h"
 #include "simulation/Elements.h"
-#include "simulation/ElementFunctions.h"
 #include "simulation/ElementGraphics.h"
 #include "simulation/Air.h"
 extern "C"
 {
 #include "hmap.h"
+#ifdef OGLR
+#include "Shaders.h"
+#endif
+}
+
+
+void Renderer::clearScreen(float alpha)
+{
+#ifdef OGLR
+	if(alpha > 0.999f)
+	{
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    }
+    else
+    {
+		glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+		glColor4f(1.0f, 1.0f, 1.0f, alpha);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+		glBegin(GL_QUADS);
+		glVertex2f(0, 0);
+		glVertex2f(XRES, 0);
+		glVertex2f(XRES, YRES);
+		glVertex2f(0, YRES);
+		glEnd();
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glBlendEquation(GL_FUNC_ADD);
+    }
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+#endif
+}
+#ifdef OGLR
+void Renderer::checkShader(GLuint shader, char * shname)
+{
+	GLint status;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE)
+	{
+		char errorBuf[ GL_INFO_LOG_LENGTH];
+		int errLen;
+		glGetShaderInfoLog(shader, GL_INFO_LOG_LENGTH, &errLen, errorBuf);
+		fprintf(stderr, "Failed to compile %s shader:\n%s\n", shname, errorBuf);
+		exit(1);
+	}
+}
+void Renderer::checkProgram(GLuint program, char * progname)
+{
+	GLint status;
+	glGetProgramiv(program, GL_LINK_STATUS, &status);
+	if (status == GL_FALSE)
+	{
+		char errorBuf[ GL_INFO_LOG_LENGTH];
+		int errLen;
+		glGetShaderInfoLog(program, GL_INFO_LOG_LENGTH, &errLen, errorBuf);
+		fprintf(stderr, "Failed to link %s program:\n%s\n", progname, errorBuf);
+		exit(1);
+	}
+}
+void Renderer::loadShaders()
+{
+	GLuint vertexShader, fragmentShader;
+
+	//Particle texture
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &fireVertex, NULL);
+	glShaderSource( fragmentShader, 1, &fireFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "FV");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "FF");
+
+	fireProg = glCreateProgram();
+	glAttachShader( fireProg, vertexShader );
+	glAttachShader( fireProg, fragmentShader );
+	glLinkProgram( fireProg );
+	checkProgram(fireProg, "F");
+
+	//Lensing
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &lensVertex, NULL);
+	glShaderSource( fragmentShader, 1, &lensFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "LV");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "LF");
+
+	lensProg = glCreateProgram();
+	glAttachShader( lensProg, vertexShader );
+	glAttachShader( lensProg, fragmentShader );
+	glLinkProgram( lensProg );
+	checkProgram(lensProg, "L");
+
+	//Air Velocity
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &airVVertex, NULL);
+	glShaderSource( fragmentShader, 1, &airVFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "AVX");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "AVF");
+
+	airProg_Velocity = glCreateProgram();
+	glAttachShader( airProg_Velocity, vertexShader );
+	glAttachShader( airProg_Velocity, fragmentShader );
+	glLinkProgram( airProg_Velocity );
+	checkProgram(airProg_Velocity, "AV");
+
+	//Air Pressure
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &airPVertex, NULL);
+	glShaderSource( fragmentShader, 1, &airPFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "APV");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "APF");
+
+	airProg_Pressure = glCreateProgram();
+	glAttachShader( airProg_Pressure, vertexShader );
+	glAttachShader( airProg_Pressure, fragmentShader );
+	glLinkProgram( airProg_Pressure );
+	checkProgram(airProg_Pressure, "AP");
+
+	//Air cracker
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &airCVertex, NULL);
+	glShaderSource( fragmentShader, 1, &airCFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "ACV");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "ACF");
+
+	airProg_Cracker = glCreateProgram();
+	glAttachShader( airProg_Cracker, vertexShader );
+	glAttachShader( airProg_Cracker, fragmentShader );
+	glLinkProgram( airProg_Cracker );
+	checkProgram(airProg_Cracker, "AC");
+}
+#endif
+
+void Renderer::FinaliseParts()
+{
+#ifdef OGLR
+	glEnable( GL_TEXTURE_2D );
+	if(display_mode & DISPLAY_WARP)
+	{
+		float xres = XRES, yres = YRES;
+		glUseProgram(lensProg);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, partsFboTex);
+		glUniform1i(glGetUniformLocation(lensProg, "pTex"), 0);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, partsTFX);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_RED, GL_FLOAT, sim->gravx);
+		glUniform1i(glGetUniformLocation(lensProg, "tfX"), 1);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, partsTFY);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_GREEN, GL_FLOAT, sim->gravy);
+		glUniform1i(glGetUniformLocation(lensProg, "tfY"), 2);
+		glActiveTexture(GL_TEXTURE0);
+		glUniform1fv(glGetUniformLocation(lensProg, "xres"), 1, &xres);
+		glUniform1fv(glGetUniformLocation(lensProg, "yres"), 1, &yres);
+	}
+	else
+	{
+		glBindTexture(GL_TEXTURE_2D, partsFboTex);
+		glBlendFunc(GL_ONE, GL_ONE);
+	}
+
+	int sdl_scale = 1;
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	glBegin(GL_QUADS);
+	glTexCoord2d(1, 0);
+	//glVertex3f(XRES*sdl_scale, (YRES+MENUSIZE)*sdl_scale, 1.0);
+	glVertex3f(XRES*sdl_scale, YRES*sdl_scale, 1.0);
+	glTexCoord2d(0, 0);
+	//glVertex3f(0, (YRES+MENUSIZE)*sdl_scale, 1.0);
+	glVertex3f(0, YRES*sdl_scale, 1.0);
+	glTexCoord2d(0, 1);
+	//glVertex3f(0, MENUSIZE*sdl_scale, 1.0);
+	glVertex3f(0, 0, 1.0);
+	glTexCoord2d(1, 1);
+	//glVertex3f(XRES*sdl_scale, MENUSIZE*sdl_scale, 1.0);
+	glVertex3f(XRES*sdl_scale, 0, 1.0);
+	glEnd();
+
+	if(display_mode & DISPLAY_WARP)
+	{
+		glUseProgram(0);
+
+	}
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDisable( GL_TEXTURE_2D );
+#endif
 }
 
 void Renderer::RenderZoom()
@@ -25,15 +237,17 @@ void Renderer::RenderZoom()
 	if(!zoomEnabled)
 		return;
 	#ifdef OGLR
+		int sdl_scale = 1;
 		int origBlendSrc, origBlendDst;
 		float zcx1, zcx0, zcy1, zcy0, yfactor, xfactor, i; //X-Factor is shit, btw
 		xfactor = 1.0f/(float)XRES;
 		yfactor = 1.0f/(float)YRES;
+		yfactor*=-1.0f;
 
-		zcx0 = (zoom_x)*xfactor;
-		zcx1 = (zoom_x+ZSIZE)*xfactor;
-		zcy0 = (zoom_y)*yfactor;
-		zcy1 = ((zoom_y+ZSIZE))*yfactor;
+		zcx1 = (zoomScopePosition.X)*xfactor;
+		zcx0 = (zoomScopePosition.X+zoomScopeSize)*xfactor;
+		zcy1 = (zoomScopePosition.Y-1)*yfactor;
+		zcy0 = ((zoomScopePosition.Y-1+zoomScopeSize))*yfactor;
 
 		glGetIntegerv(GL_BLEND_SRC, &origBlendSrc);
 		glGetIntegerv(GL_BLEND_DST, &origBlendDst);
@@ -43,59 +257,66 @@ void Renderer::RenderZoom()
 		//glReadBuffer(GL_AUX0);
 		glBindTexture(GL_TEXTURE_2D, partsFboTex);
 
+		//Draw zoomed texture
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 		glBegin(GL_QUADS);
 		glTexCoord2d(zcx1, zcy1);
-		glVertex3f((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 1.0);
+		glVertex2i(zoomWindowPosition.X, zoomWindowPosition.Y);
 		glTexCoord2d(zcx0, zcy1);
-		glVertex3f(zoom_wx*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 1.0);
+		glVertex2i(zoomWindowPosition.X+(zoomScopeSize*ZFACTOR), zoomWindowPosition.Y);
 		glTexCoord2d(zcx0, zcy0);
-		glVertex3f(zoom_wx*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 1.0);
+		glVertex2i(zoomWindowPosition.X+(zoomScopeSize*ZFACTOR), zoomWindowPosition.Y+(zoomScopeSize*ZFACTOR));
 		glTexCoord2d(zcx1, zcy0);
-		glVertex3f((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 1.0);
+		glVertex2i(zoomWindowPosition.X, zoomWindowPosition.Y+(zoomScopeSize*ZFACTOR));
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glDisable( GL_TEXTURE_2D );
 
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+		//Lines to make the pixels stand out
 		glLineWidth(sdl_scale);
-		glEnable(GL_LINE_SMOOTH);
+		//glEnable(GL_LINE_SMOOTH);
 		glBegin(GL_LINES);
 		glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-		for(i = 0; i < ZSIZE; i++)
+		for(i = 0; i < zoomScopeSize; i++)
 		{
-			glVertex2f((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR)+i*ZFACTOR)*sdl_scale);
-			glVertex2f(zoom_wx*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR)+i*ZFACTOR)*sdl_scale);
-			glVertex2f((zoom_wx+i*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale);
-			glVertex2f((zoom_wx+i*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale);
+			//Across
+			glVertex2i(zoomWindowPosition.X, zoomWindowPosition.Y+(i*ZFACTOR));
+			glVertex2i(zoomWindowPosition.X+(zoomScopeSize*ZFACTOR), zoomWindowPosition.Y+(i*ZFACTOR));
+
+			//Down
+			glVertex2i(zoomWindowPosition.X+(i*ZFACTOR), zoomWindowPosition.Y);
+			glVertex2i(zoomWindowPosition.X+(i*ZFACTOR), zoomWindowPosition.Y+(zoomScopeSize*ZFACTOR));
 		}
 		glEnd();
 
+		//Draw zoom window border
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-		glBegin(GL_LINE_STRIP);
-		glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
-		glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 0);
-		glVertex3i((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 0);
-		glVertex3i((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
-		glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
+		glBegin(GL_LINE_LOOP);
+		glVertex2i(zoomWindowPosition.X, zoomWindowPosition.Y);
+		glVertex2i(zoomWindowPosition.X+(zoomScopeSize*ZFACTOR), zoomWindowPosition.Y);
+		glVertex2i(zoomWindowPosition.X+(zoomScopeSize*ZFACTOR), zoomWindowPosition.Y+(zoomScopeSize*ZFACTOR));
+		glVertex2i(zoomWindowPosition.X, zoomWindowPosition.Y+(zoomScopeSize*ZFACTOR));
 		glEnd();
-		glDisable(GL_LINE_SMOOTH);
+		//glDisable(GL_LINE_SMOOTH);
 
-		glDisable(GL_LINE_SMOOTH);
-
-		if(zoom_en)
+		if(zoomEnabled)
 		{
 			glEnable(GL_COLOR_LOGIC_OP);
 			//glEnable(GL_LINE_SMOOTH);
 			glLogicOp(GL_XOR);
 			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-			glBegin(GL_LINE_STRIP);
-			glVertex3i((zoom_x-1)*sdl_scale, (YRES+MENUSIZE-(zoom_y-1))*sdl_scale, 0);
-			glVertex3i((zoom_x-1)*sdl_scale, (YRES+MENUSIZE-(zoom_y+ZSIZE))*sdl_scale, 0);
-			glVertex3i((zoom_x+ZSIZE)*sdl_scale, (YRES+MENUSIZE-(zoom_y+ZSIZE))*sdl_scale, 0);
-			glVertex3i((zoom_x+ZSIZE)*sdl_scale, (YRES+MENUSIZE-(zoom_y-1))*sdl_scale, 0);
-			glVertex3i((zoom_x-1)*sdl_scale, (YRES+MENUSIZE-(zoom_y-1))*sdl_scale, 0);
+			glBegin(GL_LINE_LOOP);
+			glVertex2i(zoomScopePosition.X, zoomScopePosition.Y);
+			glVertex2i(zoomScopePosition.X+zoomScopeSize, zoomScopePosition.Y);
+			glVertex2i(zoomScopePosition.X+zoomScopeSize, zoomScopePosition.Y+zoomScopeSize);
+			glVertex2i(zoomScopePosition.X, zoomScopePosition.Y+zoomScopeSize);
+			/*glVertex3i((zoomScopePosition.X-1)*sdl_scale, (YRES+MENUSIZE-(zoomScopePosition.Y-1))*sdl_scale, 0);
+			glVertex3i((zoomScopePosition.X-1)*sdl_scale, (YRES+MENUSIZE-(zoomScopePosition.Y+zoomScopeSize))*sdl_scale, 0);
+			glVertex3i((zoomScopePosition.X+zoomScopeSize)*sdl_scale, (YRES+MENUSIZE-(zoomScopePosition.Y+zoomScopeSize))*sdl_scale, 0);
+			glVertex3i((zoomScopePosition.X+zoomScopeSize)*sdl_scale, (YRES+MENUSIZE-(zoomScopePosition.Y-1))*sdl_scale, 0);
+			glVertex3i((zoomScopePosition.X-1)*sdl_scale, (YRES+MENUSIZE-(zoomScopePosition.Y-1))*sdl_scale, 0);*/
 			glEnd();
 			glDisable(GL_COLOR_LOGIC_OP);
 		}
@@ -134,6 +355,7 @@ void Renderer::RenderZoom()
 
 void Renderer::DrawWalls()
 {
+#ifndef OGLR
 	int x, y, i, j, cr, cg, cb;
 	unsigned char wt;
 	pixel pc;
@@ -147,7 +369,7 @@ void Renderer::DrawWalls()
 		for (x=0; x<XRES/CELL; x++)
 			if (bmap[y][x])
 			{
-				wt = bmap[y][x]-UI_ACTUALSTART;
+				wt = bmap[y][x];
 				if (wt<0 || wt>=UI_WALLCOUNT)
 					continue;
 				pc = wtypes[wt].colour;
@@ -185,7 +407,7 @@ void Renderer::DrawWalls()
 				}
 
 				// special rendering for some walls
-				if (bmap[y][x]==WL_EWALL)
+				if (wt==WL_EWALL)
 				{
 					if (emap[y][x])
 					{
@@ -202,7 +424,7 @@ void Renderer::DrawWalls()
 									vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = pc;
 					}
 				}
-				else if (bmap[y][x]==WL_WALLELEC)
+				else if (wt==WL_WALLELEC)
 				{
 					for (j=0; j<CELL; j++)
 						for (i=0; i<CELL; i++)
@@ -213,7 +435,7 @@ void Renderer::DrawWalls()
 								vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = PIXPACK(0x808080);
 						}
 				}
-				else if (bmap[y][x]==WL_EHOLE)
+				else if (wt==WL_EHOLE)
 				{
 					if (emap[y][x])
 					{
@@ -229,85 +451,6 @@ void Renderer::DrawWalls()
 						for (j=0; j<CELL; j+=2)
 							for (i=0; i<CELL; i+=2)
 								vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = PIXPACK(0x242424);
-					}
-				}
-				if (render_mode & PMODE_BLOB)
-				{
-					// when in blob view, draw some blobs...
-					if (wtypes[wt].drawstyle==1)
-					{
-						for (j=0; j<CELL; j+=2)
-							for (i=(j>>1)&1; i<CELL; i+=2)
-								g->drawblob((x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
-					}
-					else if (wtypes[wt].drawstyle==2)
-					{
-						for (j=0; j<CELL; j+=2)
-							for (i=0; i<CELL; i+=2)
-								g->drawblob((x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
-					}
-					else if (wtypes[wt].drawstyle==3)
-					{
-						for (j=0; j<CELL; j++)
-							for (i=0; i<CELL; i++)
-								g->drawblob((x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
-					}
-					else if (wtypes[wt].drawstyle==4)
-					{
-						for (j=0; j<CELL; j++)
-							for (i=0; i<CELL; i++)
-								if(i == j)
-									g->drawblob((x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
-								else if  (i == j+1 || (i == 0 && j == CELL-1))
-									g->drawblob((x*CELL+i), (y*CELL+j), PIXR(gc), PIXG(gc), PIXB(gc));
-								else
-									g->drawblob((x*CELL+i), (y*CELL+j), 0x20, 0x20, 0x20);
-					}
-					if (bmap[y][x]==WL_EWALL)
-					{
-						if (emap[y][x])
-						{
-							for (j=0; j<CELL; j++)
-								for (i=0; i<CELL; i++)
-									if (i&j&1)
-										g->drawblob((x*CELL+i), (y*CELL+j), 0x80, 0x80, 0x80);
-						}
-						else
-						{
-							for (j=0; j<CELL; j++)
-								for (i=0; i<CELL; i++)
-									if (!(i&j&1))
-										g->drawblob((x*CELL+i), (y*CELL+j), 0x80, 0x80, 0x80);
-						}
-					}
-					else if (bmap[y][x]==WL_WALLELEC)
-					{
-						for (j=0; j<CELL; j++)
-							for (i=0; i<CELL; i++)
-							{
-								if (!((y*CELL+j)%2) && !((x*CELL+i)%2))
-									g->drawblob((x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
-								else
-									g->drawblob((x*CELL+i), (y*CELL+j), 0x80, 0x80, 0x80);
-							}
-					}
-					else if (bmap[y][x]==WL_EHOLE)
-					{
-						if (emap[y][x])
-						{
-							for (j=0; j<CELL; j++)
-								for (i=0; i<CELL; i++)
-									g->drawblob((x*CELL+i), (y*CELL+j), 0x24, 0x24, 0x24);
-							for (j=0; j<CELL; j+=2)
-								for (i=0; i<CELL; i+=2)
-									vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = PIXPACK(0x000000);
-						}
-						else
-						{
-							for (j=0; j<CELL; j+=2)
-								for (i=0; i<CELL; i+=2)
-									g->drawblob((x*CELL+i), (y*CELL+j), 0x24, 0x24, 0x24);
-						}
 					}
 				}
 				if (wtypes[wt].eglow && emap[y][x])
@@ -326,19 +469,22 @@ void Renderer::DrawWalls()
 
 				}
 			}
+#endif
 }
 
 void Renderer::get_sign_pos(int i, int *x0, int *y0, int *w, int *h)
 {
-	sign *signs = sim->signs;
+	std::vector<sign> signs = sim->signs;
 	//Changing width if sign have special content
-	if (strcmp(signs[i].text, "{p}")==0)
+	if (signs[i].text == "{p}")
+	{
 		*w = Graphics::textwidth("Pressure: -000.00");
-
-	if (strcmp(signs[i].text, "{t}")==0)
+	}
+	else if (signs[i].text == "{t}")
+	{
 		*w = Graphics::textwidth("Temp: 0000.00");
-
-	if (sregexp(signs[i].text, "^{c:[0-9]*|.*}$")==0)
+	}
+	else if (sregexp(signs[i].text.c_str(), "^{c:[0-9]*|.*}$")==0)
 	{
 		int sldr, startm;
 		char buff[256];
@@ -354,10 +500,10 @@ void Renderer::get_sign_pos(int i, int *x0, int *y0, int *w, int *h)
 		}
 		*w = Graphics::textwidth(buff) + 5;
 	}
-
-	//Ususal width
-	if (strcmp(signs[i].text, "{p}") && strcmp(signs[i].text, "{t}") && sregexp(signs[i].text, "^{c:[0-9]*|.*}$"))
-		*w = Graphics::textwidth(signs[i].text) + 5;
+	else
+	{
+		*w = Graphics::textwidth(signs[i].text.c_str()) + 5;
+	}
 	*h = 14;
 	*x0 = (signs[i].ju == 2) ? signs[i].x - *w :
 	      (signs[i].ju == 1) ? signs[i].x - *w/2 : signs[i].x;
@@ -367,9 +513,13 @@ void Renderer::get_sign_pos(int i, int *x0, int *y0, int *w, int *h)
 void Renderer::DrawSigns()
 {
 	int i, j, x, y, w, h, dx, dy,mx,my,b=1,bq;
-	sign *signs = sim->signs;
-	for (i=0; i<MAXSIGNS; i++)
-		if (signs[i].text[0])
+	std::vector<sign> signs = sim->signs;
+#ifdef OGLR
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+	glTranslated(0, MENUSIZE, 0);
+#endif
+	for (i=0; i < signs.size(); i++)
+		if (signs[i].text.length())
 		{
 			char buff[256];  //Buffer
 			get_sign_pos(i, &x, &y, &w, &h);
@@ -377,21 +527,23 @@ void Renderer::DrawSigns()
 			g->drawrect(x, y, w, h, 192, 192, 192, 255);
 
 			//Displaying special information
-			if (strcmp(signs[i].text, "{p}")==0)
+			if (signs[i].text == "{p}")
 			{
-				sprintf(buff, "Pressure: %3.2f", sim->pv[signs[i].y/CELL][signs[i].x/CELL]);  //...pressure
+				float pressure = 0.0f;
+				if (signs[i].x>=0 && signs[i].x<XRES && signs[i].y>=0 && signs[i].y<YRES)
+					pressure = sim->pv[signs[i].y/CELL][signs[i].x/CELL];
+				sprintf(buff, "Pressure: %3.2f", pressure);  //...pressure
 				g->drawtext(x+3, y+3, buff, 255, 255, 255, 255);
 			}
-			if (strcmp(signs[i].text, "{t}")==0)
+			else if (signs[i].text == "{t}")
 			{
-				if (sim->pmap[signs[i].y][signs[i].x])
-					sprintf(buff, "Temp: %4.2f", sim->parts[sim->pmap[signs[i].y][signs[i].x]>>8].temp-273.15);  //...tempirature
+				if (signs[i].x>=0 && signs[i].x<XRES && signs[i].y>=0 && signs[i].y<YRES && sim->pmap[signs[i].y][signs[i].x])
+					sprintf(buff, "Temp: %4.2f", sim->parts[sim->pmap[signs[i].y][signs[i].x]>>8].temp-273.15);  //...temperature
 				else
-					sprintf(buff, "Temp: 0.00");  //...tempirature
+					sprintf(buff, "Temp: 0.00");  //...temperature
 				g->drawtext(x+3, y+3, buff, 255, 255, 255, 255);
 			}
-
-			if (sregexp(signs[i].text, "^{c:[0-9]*|.*}$")==0)
+			else if (sregexp(signs[i].text.c_str(), "^{c:[0-9]*|.*}$")==0)
 			{
 				int sldr, startm;
 				memset(buff, 0, sizeof(buff));
@@ -405,21 +557,29 @@ void Renderer::DrawSigns()
 				}
 				g->drawtext(x+3, y+3, buff, 0, 191, 255, 255);
 			}
-
-			//Usual text
-			if (strcmp(signs[i].text, "{p}") && strcmp(signs[i].text, "{t}") && sregexp(signs[i].text, "^{c:[0-9]*|.*}$"))
+			else 
+			{
 				g->drawtext(x+3, y+3, signs[i].text, 255, 255, 255, 255);
-
+			}
+				
 			x = signs[i].x;
 			y = signs[i].y;
 			dx = 1 - signs[i].ju;
 			dy = (signs[i].y > 18) ? -1 : 1;
+#ifdef OGLR
+			glBegin(GL_LINES);
+			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+			glVertex2i(x, y);
+			glVertex2i(x+(dx*4), y+(dy*4));
+			glEnd();
+#else
 			for (j=0; j<4; j++)
 			{
-				g->drawpixel(x, y, 192, 192, 192, 255);
+				g->blendpixel(x, y, 192, 192, 192, 255);
 				x+=dx;
 				y+=dy;
 			}
+#endif
 			/*if (MSIGN==i)
 			{
 				bq = b;
@@ -430,10 +590,15 @@ void Renderer::DrawSigns()
 				signs[i].y = my;
 			}*/
 		}
+#ifdef OGLR
+	glTranslated(0, -MENUSIZE, 0);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+#endif
 }
 
 void Renderer::render_gravlensing()
 {
+#ifndef OGLR
 	int nx, ny, rx, ry, gx, gy, bx, by, co;
 	int r, g, b;
 	pixel t;
@@ -463,27 +628,15 @@ void Renderer::render_gravlensing()
 				if (b>255)
 					b = 255;
 				dst[ny*(XRES+BARSIZE)+nx] = PIXRGB(r,g,b);
-				//	addpixel(dst, nx, ny, PIXR(src[ry*(XRES+BARSIZE)+rx]), PIXG(src[gy*(XRES+BARSIZE)+gx]), PIXB(src[by*(XRES+BARSIZE)+bx]), 255);
 			}
-
-			/*rx = nx+(gravxf[(ny*XRES)+nx]*0.5f);
-			ry = ny+(gravyf[(ny*XRES)+nx]*0.5f);
-			gx = nx+(gravxf[(ny*XRES)+nx]*0.75f);
-			gy = ny+(gravyf[(ny*XRES)+nx]*0.75f);
-			bx = nx+(gravxf[(ny*XRES)+nx]);
-			by = ny+(gravyf[(ny*XRES)+nx]);
-			if(rx > 0 && rx < XRES && ry > 0 && ry < YRES && gravp[ny/CELL][nx/CELL]*0.5f > -8.0f)
-				addpixel(dst, rx, ry, PIXR(src[ry*(XRES+BARSIZE)+rx]), 0, 0, 255);
-			if(gx > 0 && gx < XRES && gy > 0 && gy < YRES && gravp[ny/CELL][nx/CELL]*0.75f > -8.0f)
-				addpixel(dst, gx, gy, 0, PIXG(src[ry*(XRES+BARSIZE)+rx]), 0, 255);
-			if(bx > 0 && bx < XRES && by > 0 && by < YRES && gravp[ny/CELL][nx/CELL] > -8.0f)
-				addpixel(dst, bx, by, 0, 0, PIXB(src[ry*(XRES+BARSIZE)+rx]), 255);*/
 		}
 	}
+#endif
 }
 
 void Renderer::render_fire()
 {
+#ifndef OGLR
 	int i,j,x,y,r,g,b,nx,ny;
 	for (j=0; j<YRES/CELL; j++)
 		for (i=0; i<XRES/CELL; i++)
@@ -492,8 +645,8 @@ void Renderer::render_fire()
 			g = fire_g[j][i];
 			b = fire_b[j][i];
 			if (r || g || b)
-				for (y=-CELL+1; y<2*CELL; y++)
-					for (x=-CELL+1; x<2*CELL; x++)
+				for (y=-CELL; y<2*CELL; y++)
+					for (x=-CELL; x<2*CELL; x++)
 						this->g->addpixel(i*CELL+x, j*CELL+y, r, g, b, fire_alpha[y+CELL][x+CELL]);
 			r *= 8;
 			g *= 8;
@@ -513,17 +666,19 @@ void Renderer::render_fire()
 			fire_g[j][i] = g>4 ? g-4 : 0;
 			fire_b[j][i] = b>4 ? b-4 : 0;
 		}
+#endif
 }
 
+float temp[CELL*3][CELL*3];
+float fire_alphaf[CELL*3][CELL*3];
+float glow_alphaf[11][11];
+float blur_alphaf[7][7];
 void Renderer::prepare_alpha(int size, float intensity)
 {
 	//TODO: implement size
 	int x,y,i,j,c;
 	float multiplier = 255.0f*intensity;
-	float temp[CELL*3][CELL*3];
-	float fire_alphaf[CELL*3][CELL*3];
-	float glow_alphaf[11][11];
-	float blur_alphaf[7][7];
+
 	memset(temp, 0, sizeof(temp));
 	for (x=0; x<CELL; x++)
 		for (y=0; y<CELL; y++)
@@ -535,6 +690,7 @@ void Renderer::prepare_alpha(int size, float intensity)
 			fire_alpha[y][x] = (int)(multiplier*temp[y][x]/(CELL*CELL));
 
 #ifdef OGLR
+	memset(fire_alphaf, 0, sizeof(fire_alphaf));
 	for (x=0; x<CELL*3; x++)
 		for (y=0; y<CELL*3; y++)
 		{
@@ -605,12 +761,11 @@ void Renderer::render_parts()
 	float gradv, flicker, fnx, fny;
 	Particle * parts;
 	part_transition *ptransitions;
-	part_type *ptypes;
+	Element *elements;
 	if(!sim)
 		return;
 	parts = sim->parts;
-	ptransitions = sim->ptransitions;
-	ptypes = sim->ptypes;
+	elements = sim->elements;
 #ifdef OGLR
 	int cfireV = 0, cfireC = 0, cfire = 0;
 	int csmokeV = 0, csmokeC = 0, csmoke = 0;
@@ -620,12 +775,13 @@ void Renderer::render_parts()
 	int cflatV = 0, cflatC = 0, cflat = 0;
 	int caddV = 0, caddC = 0, cadd = 0;
 	int clineV = 0, clineC = 0, cline = 0;
-	GLuint origBlendSrc, origBlendDst;
+	GLint origBlendSrc, origBlendDst;
 
 	glGetIntegerv(GL_BLEND_SRC, &origBlendSrc);
 	glGetIntegerv(GL_BLEND_DST, &origBlendDst);
 	//Render to the particle FBO
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+	glTranslated(0, MENUSIZE, 0);
 #else
 	/*if (GRID_MODE)//draws the grid
 	{
@@ -648,15 +804,15 @@ void Renderer::render_parts()
 			fnx = sim->parts[i].x;
 			fny = sim->parts[i].y;
 
-			if((sim->photons[ny][nx]&0xFF) && !(ptypes[t].properties & TYPE_ENERGY))
+			if((sim->photons[ny][nx]&0xFF) && !(elements[t].Properties & TYPE_ENERGY))
 				continue;
 
 			//Defaults
 			pixel_mode = 0 | PMODE_FLAT;
 			cola = 255;
-			colr = PIXR(ptypes[t].pcolors);
-			colg = PIXG(ptypes[t].pcolors);
-			colb = PIXB(ptypes[t].pcolors);
+			colr = PIXR(elements[t].Colour);
+			colg = PIXG(elements[t].Colour);
+			colb = PIXB(elements[t].Colour);
 			firea = 0;
 
 			deca = (sim->parts[i].dcolour>>24)&0xFF;
@@ -664,27 +820,6 @@ void Renderer::render_parts()
 			decg = (sim->parts[i].dcolour>>8)&0xFF;
 			decb = (sim->parts[i].dcolour)&0xFF;
 
-			/*if(display_mode == RENDER_NONE)
-			{
-				if(decorations_enable)
-				{
-					colr = (deca*decr + (255-deca)*colr) >> 8;
-					colg = (deca*decg + (255-deca)*colg) >> 8;
-					colb = (deca*decb + (255-deca)*colb) >> 8;
-				}
-#ifdef OGLR
-		        flatV[cflatV++] = nx;
-		        flatV[cflatV++] = ny;
-		        flatC[cflatC++] = ((float)colr)/255.0f;
-		        flatC[cflatC++] = ((float)colg)/255.0f;
-		        flatC[cflatC++] = ((float)colb)/255.0f;
-		        flatC[cflatC++] = 1.0f;
-		        cflat++;
-#else
-		        vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(colr,colg,colb);
-#endif
-			}
-			else*/
 			{
 				if (graphicscache[t].isready)
 				{
@@ -698,11 +833,11 @@ void Renderer::render_parts()
 					fireg = graphicscache[t].fireg;
 					fireb = graphicscache[t].fireb;
 				}
-				else
+				else if(!(colour_mode & COLOUR_BASC))
 				{
-					if (ptypes[t].graphics_func)
+					if (elements[t].Graphics)
 					{
-						if ((*(ptypes[t].graphics_func))(this, &(sim->parts[i]), nx, ny, &pixel_mode, &cola, &colr, &colg, &colb, &firea, &firer, &fireg, &fireb)) //That's a lot of args, a struct might be better
+						if ((*(elements[t].Graphics))(this, &(sim->parts[i]), nx, ny, &pixel_mode, &cola, &colr, &colg, &colb, &firea, &firer, &fireg, &fireb)) //That's a lot of args, a struct might be better
 						{
 							graphicscache[t].isready = 1;
 							graphicscache[t].pixel_mode = pixel_mode;
@@ -718,25 +853,22 @@ void Renderer::render_parts()
 					}
 					else
 					{
-						if(graphics_DEFAULT(this, &(sim->parts[i]), nx, ny, &pixel_mode, &cola, &colr, &colg, &colb, &firea, &firer, &fireg, &fireb))
-						{
-							graphicscache[t].isready = 1;
-							graphicscache[t].pixel_mode = pixel_mode;
-							graphicscache[t].cola = cola;
-							graphicscache[t].colr = colr;
-							graphicscache[t].colg = colg;
-							graphicscache[t].colb = colb;
-							graphicscache[t].firea = firea;
-							graphicscache[t].firer = firer;
-							graphicscache[t].fireg = fireg;
-							graphicscache[t].fireb = fireb;
-						}
+						graphicscache[t].isready = 1;
+						graphicscache[t].pixel_mode = pixel_mode;
+						graphicscache[t].cola = cola;
+						graphicscache[t].colr = colr;
+						graphicscache[t].colg = colg;
+						graphicscache[t].colb = colb;
+						graphicscache[t].firea = firea;
+						graphicscache[t].firer = firer;
+						graphicscache[t].fireg = fireg;
+						graphicscache[t].fireb = fireb;
 					}
 				}
-				if((ptypes[t].properties & PROP_HOT_GLOW) && sim->parts[i].temp>(ptransitions[t].thv-800.0f))
+				if((elements[t].Properties & PROP_HOT_GLOW) && sim->parts[i].temp>(elements[t].HighTemperature-800.0f))
 				{
-					gradv = 3.1415/(2*ptransitions[t].thv-(ptransitions[t].thv-800.0f));
-					caddress = (sim->parts[i].temp>ptransitions[t].thv)?ptransitions[t].thv-(ptransitions[t].thv-800.0f):sim->parts[i].temp-(ptransitions[t].thv-800.0f);
+					gradv = 3.1415/(2*elements[t].HighTemperature-(elements[t].HighTemperature-800.0f));
+					caddress = (sim->parts[i].temp>elements[t].HighTemperature)?elements[t].HighTemperature-(elements[t].HighTemperature-800.0f):sim->parts[i].temp-(elements[t].HighTemperature-800.0f);
 					colr += sin(gradv*caddress) * 226;;
 					colg += sin(gradv*caddress*4.55 +3.14) * 34;
 					colb += sin(gradv*caddress*2.22 +3.14) * 64;
@@ -749,7 +881,7 @@ void Renderer::render_parts()
 				if((pixel_mode & PMODE_BLUR) && !(render_mode & PMODE_BLUR))
 					pixel_mode |= PMODE_FLAT;
 				if((pixel_mode & PMODE_GLOW) && !(render_mode & PMODE_GLOW))
-					pixel_mode |= PMODE_FLAT;
+					pixel_mode |= PMODE_BLEND;
 				if (render_mode & PMODE_BLOB)
 					pixel_mode |= PMODE_BLOB;
 
@@ -777,18 +909,16 @@ void Renderer::render_parts()
 					cola = 255;
 					if(pixel_mode & (FIREMODE | PMODE_GLOW)) pixel_mode = (pixel_mode & ~(FIREMODE|PMODE_GLOW)) | PMODE_BLUR;
 				}
-				else if (colour_mode & COLOUR_GRAD)
+				else if(colour_mode & COLOUR_BASC)
 				{
-					float frequency = 0.05;
-					int q = sim->parts[i].temp-40;
-					colr = sin(frequency*q) * 16 + colr;
-					colg = sin(frequency*q) * 16 + colg;
-					colb = sin(frequency*q) * 16 + colb;
-					if(pixel_mode & (FIREMODE | PMODE_GLOW)) pixel_mode = (pixel_mode & ~(FIREMODE|PMODE_GLOW)) | PMODE_BLUR;
+					colr = PIXR(elements[t].Colour);
+					colg = PIXG(elements[t].Colour);
+					colb = PIXB(elements[t].Colour);
+					pixel_mode = PMODE_FLAT;
 				}
 
 				//Apply decoration colour
-				if(!colour_mode)
+				if(!(colour_mode & ~COLOUR_GRAD))
 				{
 					if(!(pixel_mode & NO_DECO) && decorations_enable)
 					{
@@ -803,6 +933,16 @@ void Renderer::render_parts()
 						fireg = (deca*decg + (255-deca)*fireg) >> 8;
 						fireb = (deca*decb + (255-deca)*fireb) >> 8;
 					}
+				}
+
+				if (colour_mode & COLOUR_GRAD)
+				{
+					float frequency = 0.05;
+					int q = sim->parts[i].temp-40;
+					colr = sin(frequency*q) * 16 + colr;
+					colg = sin(frequency*q) * 16 + colg;
+					colb = sin(frequency*q) * 16 + colb;
+					if(pixel_mode & (FIREMODE | PMODE_GLOW)) pixel_mode = (pixel_mode & ~(FIREMODE|PMODE_GLOW)) | PMODE_BLUR;
 				}
 
 	#ifndef OGLR
@@ -843,9 +983,9 @@ void Renderer::render_parts()
 					{
 						if (cplayer->elem<PT_NUM)
 						{
-							colr = PIXR(ptypes[cplayer->elem].pcolors);
-							colg = PIXG(ptypes[cplayer->elem].pcolors);
-							colb = PIXB(ptypes[cplayer->elem].pcolors);
+							colr = PIXR(elements[cplayer->elem].Colour);
+							colg = PIXG(elements[cplayer->elem].Colour);
+							colb = PIXB(elements[cplayer->elem].Colour);
 						}
 						else
 						{
@@ -1009,6 +1149,7 @@ void Renderer::render_parts()
 				}
 				if(pixel_mode & PMODE_GLOW)
 				{
+					int cola1 = (5*cola)/255;
 #ifdef OGLR
                     glowV[cglowV++] = nx;
                     glowV[cglowV++] = ny;
@@ -1018,24 +1159,24 @@ void Renderer::render_parts()
                     glowC[cglowC++] = 1.0f;
                     cglow++;
 #else
-                    g->addpixel(nx, ny, colr, colg, colb, 192);
-                    g->addpixel(nx+1, ny, colr, colg, colb, 96);
-                    g->addpixel(nx-1, ny, colr, colg, colb, 96);
-                    g->addpixel(nx, ny+1, colr, colg, colb, 96);
-                    g->addpixel(nx, ny-1, colr, colg, colb, 96);
+                    g->addpixel(nx, ny, colr, colg, colb, (192*cola)/255);
+                    g->addpixel(nx+1, ny, colr, colg, colb, (96*cola)/255);
+                    g->addpixel(nx-1, ny, colr, colg, colb, (96*cola)/255);
+                    g->addpixel(nx, ny+1, colr, colg, colb, (96*cola)/255);
+                    g->addpixel(nx, ny-1, colr, colg, colb, (96*cola)/255);
 
 					for (x = 1; x < 6; x++) {
-						g->addpixel(nx, ny-x, colr, colg, colb, 5);
-						g->addpixel(nx, ny+x, colr, colg, colb, 5);
-						g->addpixel(nx-x, ny, colr, colg, colb, 5);
-						g->addpixel(nx+x, ny, colr, colg, colb, 5);
+						g->addpixel(nx, ny-x, colr, colg, colb, cola1);
+						g->addpixel(nx, ny+x, colr, colg, colb, cola1);
+						g->addpixel(nx-x, ny, colr, colg, colb, cola1);
+						g->addpixel(nx+x, ny, colr, colg, colb, cola1);
 						for (y = 1; y < 6; y++) {
 							if(x + y > 7)
 								continue;
-							g->addpixel(nx+x, ny-y, colr, colg, colb, 5);
-							g->addpixel(nx-x, ny+y, colr, colg, colb, 5);
-							g->addpixel(nx+x, ny+y, colr, colg, colb, 5);
-							g->addpixel(nx-x, ny-y, colr, colg, colb, 5);
+							g->addpixel(nx+x, ny-y, colr, colg, colb, cola1);
+							g->addpixel(nx-x, ny+y, colr, colg, colb, cola1);
+							g->addpixel(nx+x, ny+y, colr, colg, colb, cola1);
+							g->addpixel(nx-x, ny-y, colr, colg, colb, cola1);
 						}
 					}
 #endif
@@ -1535,9 +1676,8 @@ void Renderer::render_parts()
         glDisableClientState(GL_VERTEX_ARRAY);
 
         //Reset FBO
+        glTranslated(0, -MENUSIZE, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-
-        //Drawing the FBO onto the screen sounds like a cool idea now
 
         glBlendFunc(origBlendSrc, origBlendDst);
 #endif
@@ -1554,6 +1694,8 @@ void Renderer::draw_other() // EMP effect
 	if (emp_decor>0)
 	{
 #ifdef OGLR
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+		glTranslated(0, MENUSIZE, 0);
 		float femp_decor = ((float)emp_decor)/255.0f;
 		/*int r=emp_decor*2.5, g=100+emp_decor*1.5, b=255;
 		int a=(1.0*emp_decor/110)*255;
@@ -1568,6 +1710,8 @@ void Renderer::draw_other() // EMP effect
 		glVertex2f(XRES, YRES+MENUSIZE);
 		glVertex2f(0, YRES+MENUSIZE);
 		glEnd();
+		glTranslated(0, -MENUSIZE, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 #else
 		int r=emp_decor*2.5, g=100+emp_decor*1.5, b=255;
 		int a=(1.0*emp_decor/110)*255;
@@ -1578,7 +1722,7 @@ void Renderer::draw_other() // EMP effect
 		for (j=0; j<YRES; j++)
 			for (i=0; i<XRES; i++)
 			{
-				this->g->drawpixel(i, j, r, g, b, a);
+				this->g->blendpixel(i, j, r, g, b, a);
 			}
 #endif
 	}
@@ -1682,6 +1826,7 @@ void Renderer::draw_air()
 					g->vid[(x*CELL+i) + (y*CELL+j)*(XRES+BARSIZE)] = c;
 		}
 #else
+	int sdl_scale = 1;
 	GLuint airProg;
 	if(display_mode & DISPLAY_AIRC)
 	{
@@ -1702,20 +1847,21 @@ void Renderer::draw_air()
 
     glEnable( GL_TEXTURE_2D );
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+    glTranslated(0, MENUSIZE, 0);
 
 	glUseProgram(airProg);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, airVX);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_RED, GL_FLOAT, vx);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_RED, GL_FLOAT, sim->air->vx);
     glUniform1i(glGetUniformLocation(airProg, "airX"), 0);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, airVY);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_GREEN, GL_FLOAT, vy);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_GREEN, GL_FLOAT, sim->air->vy);
     glUniform1i(glGetUniformLocation(airProg, "airY"), 1);
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, airPV);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_BLUE, GL_FLOAT, pv);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_BLUE, GL_FLOAT, sim->air->pv);
     glUniform1i(glGetUniformLocation(airProg, "airP"), 2);
     glActiveTexture(GL_TEXTURE0);
 
@@ -1733,6 +1879,7 @@ void Renderer::draw_air()
 
     glUseProgram(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glTranslated(0, -MENUSIZE, 0);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glDisable( GL_TEXTURE_2D );
 #endif
@@ -1750,12 +1897,25 @@ void Renderer::draw_grav_zones()
 				for (j=0; j<CELL; j++)//draws the colors
 					for (i=0; i<CELL; i++)
 						if(i == j)
-							g->drawpixel(x*CELL+i, y*CELL+j, 255, 200, 0, 120);
+							g->blendpixel(x*CELL+i, y*CELL+j, 255, 200, 0, 120);
 						else
-							g->drawpixel(x*CELL+i, y*CELL+j, 32, 32, 32, 120);
+							g->blendpixel(x*CELL+i, y*CELL+j, 32, 32, 32, 120);
 			}
 		}
 	}
+}
+
+void Renderer::drawblob(int x, int y, unsigned char cr, unsigned char cg, unsigned char cb)
+{
+	g->blendpixel(x+1, y, cr, cg, cb, 112);
+	g->blendpixel(x-1, y, cr, cg, cb, 112);
+	g->blendpixel(x, y+1, cr, cg, cb, 112);
+	g->blendpixel(x, y-1, cr, cg, cb, 112);
+
+	g->blendpixel(x+1, y-1, cr, cg, cb, 64);
+	g->blendpixel(x-1, y-1, cr, cg, cb, 64);
+	g->blendpixel(x+1, y+1, cr, cg, cb, 64);
+	g->blendpixel(x-1, y+1, cr, cg, cb, 64);
 }
 
 Renderer::Renderer(Graphics * g, Simulation * sim):
@@ -1774,7 +1934,6 @@ Renderer::Renderer(Graphics * g, Simulation * sim):
 	memset(fire_r, 0, sizeof(fire_r));
 	memset(fire_g, 0, sizeof(fire_g));
 	memset(fire_b, 0, sizeof(fire_b));
-	prepare_alpha(CELL, 1.0f);
 
 	//Set defauly display modes
 	SetColourMode(COLOUR_DEFAULT);
@@ -1795,6 +1954,138 @@ Renderer::Renderer(Graphics * g, Simulation * sim):
 
 	flm_data = Graphics::GenerateGradient(fireColours, fireColoursPoints, fireColoursCount, 200);
 	plasma_data = Graphics::GenerateGradient(plasmaColours, plasmaColoursPoints, plasmaColoursCount, 200);
+
+#ifdef OGLR
+	//FBO Texture
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &partsFboTex);
+	glBindTexture(GL_TEXTURE_2D, partsFboTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, XRES, YRES, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+
+	//FBO
+	glGenFramebuffers(1, &partsFbo);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
+	glEnable(GL_BLEND);
+	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, partsFboTex, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // Reset framebuffer binding
+	glDisable(GL_TEXTURE_2D);
+
+	//Texture for air to be drawn
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &airBuf);
+	glBindTexture(GL_TEXTURE_2D, airBuf);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, XRES/CELL, YRES/CELL, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	//Zoom texture
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &zoomTex);
+	glBindTexture(GL_TEXTURE_2D, zoomTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	//Texture for velocity maps for gravity
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &partsTFX);
+	glBindTexture(GL_TEXTURE_2D, partsTFX);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, XRES/CELL, YRES/CELL, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glGenTextures(1, &partsTFY);
+	glBindTexture(GL_TEXTURE_2D, partsTFY);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, XRES/CELL, YRES/CELL, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	//Texture for velocity maps for air
+	//TODO: Combine all air maps into 3D array or structs
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &airVX);
+	glBindTexture(GL_TEXTURE_2D, airVX);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, XRES/CELL, YRES/CELL, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glGenTextures(1, &airVY);
+	glBindTexture(GL_TEXTURE_2D, airVY);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, XRES/CELL, YRES/CELL, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glGenTextures(1, &airPV);
+	glBindTexture(GL_TEXTURE_2D, airPV);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, XRES/CELL, YRES/CELL, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	//Fire alpha texture
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &fireAlpha);
+	glBindTexture(GL_TEXTURE_2D, fireAlpha);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, CELL*3, CELL*3, 0, GL_ALPHA, GL_FLOAT, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	//Glow alpha texture
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &glowAlpha);
+	glBindTexture(GL_TEXTURE_2D, glowAlpha);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, 11, 11, 0, GL_ALPHA, GL_FLOAT, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+
+	//Blur Alpha texture
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &blurAlpha);
+	glBindTexture(GL_TEXTURE_2D, blurAlpha);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, 7, 7, 0, GL_ALPHA, GL_FLOAT, NULL);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+
+	loadShaders();
+#endif
+	prepare_alpha(CELL, 1.0f);
 }
 
 void Renderer::CompileRenderMode()
@@ -1901,3 +2192,4 @@ Renderer::~Renderer()
 	free(flm_data);
 	free(plasma_data);
 }
+

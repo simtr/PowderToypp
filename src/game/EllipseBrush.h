@@ -8,6 +8,7 @@
 #ifndef ELIPSEBRUSH_H_
 #define ELIPSEBRUSH_H_
 
+#include <cmath>
 #include "Brush.h"
 
 class EllipseBrush: public Brush
@@ -18,39 +19,24 @@ public:
 	{
 
 	};
-	//Draw the brush outline onto the screen
-	virtual void RenderPoint(Graphics * g, ui::Point position)
-	{
-		if(!bitmap)
-			GenerateBitmap();
-		//g->fillrect(position.X-size.X-1, position.Y-size.Y-1, (size.X*2)+2, (size.Y*2)+2, 255, 0, 255, 70);
-		for(int x = 0; x <= size.X*2; x++)
-		{
-			for(int y = 0; y <= size.Y*2; y++)
-			{
-				if(bitmap[y*(size.X*2)+x])
-					g->blendpixel(position.X-size.X+x, position.Y-size.Y+y, 255, 0, 255, 70);
-			}
-		}
-	}
 	virtual void GenerateBitmap()
 	{
 		if(bitmap)
 			free(bitmap);
-		bitmap = (bool *)malloc(sizeof(bool)*(((size.X*2)+1)*((size.Y*2)+1)));
-		int rx = size.X;
-		int ry = size.Y;
-		for(int x = 0; x <= size.X*2; x++)
+		bitmap = (unsigned char*)calloc((size.X*size.Y), sizeof(unsigned char));
+		int rx = radius.X;
+		int ry = radius.Y;
+		for(int x = 0; x <= radius.X*2; x++)
 		{
-			for(int y = 0; y <= size.Y*2; y++)
+			for(int y = 0; y <= radius.Y*2; y++)
 			{
-				if((pow(x-size.X,2)*pow(ry,2)+pow(y-size.Y,2)*pow(rx,2)<=pow(rx,2)*pow(ry,2)))
+				if((pow(x-radius.X,2.0f)*pow(ry,2.0f)+pow(y-radius.Y,2.0f)*pow(rx,2.0f)<=pow(rx,2.0f)*pow(ry,2.0f)))
 				{
-					bitmap[y*(size.X*2)+x] = true;
+					bitmap[y*(size.X)+x] = 255;
 				}
 				else
 				{
-					bitmap[y*(size.X*2)+x] = false;
+					bitmap[y*(size.X)+x] = 0;
 				}
 			}
 		}

@@ -6,7 +6,10 @@
  */
 
 #include <bzlib.h>
+#include <cmath>
+#include "Air.h"
 #include "SaveLoader.h"
+#include "bson/BSON.h"
 
 //!TODO: enum for LoadSave return
 
@@ -37,7 +40,7 @@ int SaveLoader::Load(unsigned char * data, int dataLength, Simulation * sim, boo
 	}
 	if(saveData[0] == 'O' && saveData[1] == 'P' && saveData[2] == 'S')
 	{
-		return OPSLoad(data, dataLength, sim);
+		return OPSLoad(data, dataLength, sim, replace, x, y);
 	}
 	else if((saveData[0]==0x66 && saveData[1]==0x75 && saveData[2]==0x43) || (saveData[0]==0x50 && saveData[1]==0x53 && saveData[2]==0x76))
 	{
@@ -60,14 +63,868 @@ int SaveLoader::OPSInfo(unsigned char * data, int dataLength, int & width, int &
 }
 
 
-int SaveLoader::OPSLoad(unsigned char * data, int dataLength, Simulation * sim)
+int SaveLoader::OPSLoad(unsigned char * data, int dataLength, Simulation * sim, bool replace, int x0, int y0)
 {
-	return 2;
+	Particle *partsptr = sim->parts;
+	unsigned char * inputData = data, *bsonData = NULL, *partsData = NULL, *partsPosData = NULL, *fanData = NULL, *wallData = NULL;
+	unsigned int inputDataLen = dataLength, bsonDataLen = 0, partsDataLen, partsPosDataLen, fanDataLen, wallDataLen;
+	int i, freeIndicesCount, x, y, returnCode = 0, j;
+	int *freeIndices = NULL;
+	int blockX, blockY, blockW, blockH, fullX, fullY, fullW, fullH;
+	bson b;
+	bson_iterator iter;
+
+	//Block sizes
+	blockX = x0/CELL;
+	blockY = y0/CELL;
+	blockW = inputData[6];
+	blockH = inputData[7];
+
+	//Full size, normalised
+	fullX = blockX*CELL;
+	fullY = blockY*CELL;
+	fullW = blockW*CELL;
+	fullH = blockH*CELL;
+
+	//From newer version
+	if(inputData[4] > SAVE_VERSION)
+	{
+		fprintf(stderr, "Save from newer version\n");
+		return 2;
+	}
+
+	//Incompatible cell size
+	if(inputData[5] > CELL)
+	{
+		fprintf(stderr, "Cell size mismatch\n");
+		return 1;
+	}
+
+	//Too large/off screen
+	if(blockX+blockW > XRES/CELL || blockY+blockH > YRES/CELL)
+	{
+		fprintf(stderr, "Save too large\n");
+		return 1;
+	}
+
+	bsonDataLen = ((unsigned)inputData[8]);
+	bsonDataLen |= ((unsigned)inputData[9]) << 8;
+	bsonDataLen |= ((unsigned)inputData[10]) << 16;
+	bsonDataLen |= ((unsigned)inputData[11]) << 24;
+
+	bsonData = (unsigned char*)malloc(bsonDataLen+1);
+	if(!bsonData)
+	{
+		fprintf(stderr, "Internal error while parsing save: could not allocate buffer\n");
+		return 3;
+	}
+	//Make sure bsonData is null terminated, since all string functions need null terminated strings
+	//(bson_iterator_key returns a pointer into bsonData, which is then used with strcmp)
+	bsonData[bsonDataLen] = 0;
+
+	if (BZ2_bzBuffToBuffDecompress((char*)bsonData, &bsonDataLen, (char*)(inputData+12), inputDataLen-12, 0, 0))
+	{
+		fprintf(stderr, "Unable to decompress\n");
+		return 1;
+	}
+
+	if(replace)
+	{
+		//Remove everything
+		sim->clear_sim();
+	}
+
+	bson_init_data(&b, (char*)bsonData);
+	bson_iterator_init(&iter, &b);
+
+	std::vector<sign> tempSigns;
+
+	while(bson_iterator_next(&iter))
+	{
+		if(strcmp(bson_iterator_key(&iter), "signs")==0)
+		{
+			if(bson_iterator_type(&iter)==BSON_ARRAY)
+			{
+				bson_iterator subiter;
+				bson_iterator_subiterator(&iter, &subiter);
+				while(bson_iterator_next(&subiter))
+				{
+					if(strcmp(bson_iterator_key(&subiter), "sign")==0)
+					{
+						if(bson_iterator_type(&subiter)==BSON_OBJECT)
+						{
+							bson_iterator signiter;
+							bson_iterator_subiterator(&subiter, &signiter);
+
+							sign tempSign("", 0, 0, sign::Left);
+							while(bson_iterator_next(&signiter))
+							{
+								if(strcmp(bson_iterator_key(&signiter), "text")==0 && bson_iterator_type(&signiter)==BSON_STRING)
+								{
+									tempSign.text = bson_iterator_string(&signiter);
+									clean_text((char*)tempSign.text.c_str(), 158-14);
+								}
+								else if(strcmp(bson_iterator_key(&signiter), "justification")==0 && bson_iterator_type(&signiter)==BSON_INT)
+								{
+									tempSign.ju = (sign::Justification)bson_iterator_int(&signiter);
+								}
+								else if(strcmp(bson_iterator_key(&signiter), "x")==0 && bson_iterator_type(&signiter)==BSON_INT)
+								{
+									tempSign.x = bson_iterator_int(&signiter)+fullX;
+								}
+								else if(strcmp(bson_iterator_key(&signiter), "y")==0 && bson_iterator_type(&signiter)==BSON_INT)
+								{
+									tempSign.y = bson_iterator_int(&signiter)+fullY;
+								}
+								else
+								{
+									fprintf(stderr, "Unknown sign property %s\n", bson_iterator_key(&signiter));
+								}
+							}
+							tempSigns.push_back(tempSign);
+						}
+						else
+						{
+							fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&subiter));
+						}
+					}
+				}
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "parts")==0)
+		{
+			if(bson_iterator_type(&iter)==BSON_BINDATA && ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER && (partsDataLen = bson_iterator_bin_len(&iter)) > 0)
+			{
+				partsData = (unsigned char*)bson_iterator_bin_data(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Invalid datatype of particle data: %d[%d] %d[%d] %d[%d]\n", bson_iterator_type(&iter), bson_iterator_type(&iter)==BSON_BINDATA, (unsigned char)bson_iterator_bin_type(&iter), ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER, bson_iterator_bin_len(&iter), bson_iterator_bin_len(&iter)>0);
+			}
+		}
+		if(strcmp(bson_iterator_key(&iter), "partsPos")==0)
+		{
+			if(bson_iterator_type(&iter)==BSON_BINDATA && ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER && (partsPosDataLen = bson_iterator_bin_len(&iter)) > 0)
+			{
+				partsPosData = (unsigned char*)bson_iterator_bin_data(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Invalid datatype of particle position data: %d[%d] %d[%d] %d[%d]\n", bson_iterator_type(&iter), bson_iterator_type(&iter)==BSON_BINDATA, (unsigned char)bson_iterator_bin_type(&iter), ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER, bson_iterator_bin_len(&iter), bson_iterator_bin_len(&iter)>0);
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "wallMap")==0)
+		{
+			if(bson_iterator_type(&iter)==BSON_BINDATA && ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER && (wallDataLen = bson_iterator_bin_len(&iter)) > 0)
+			{
+				wallData = (unsigned char*)bson_iterator_bin_data(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Invalid datatype of wall data: %d[%d] %d[%d] %d[%d]\n", bson_iterator_type(&iter), bson_iterator_type(&iter)==BSON_BINDATA, (unsigned char)bson_iterator_bin_type(&iter), ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER, bson_iterator_bin_len(&iter), bson_iterator_bin_len(&iter)>0);
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "fanMap")==0)
+		{
+			if(bson_iterator_type(&iter)==BSON_BINDATA && ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER && (fanDataLen = bson_iterator_bin_len(&iter)) > 0)
+			{
+				fanData = (unsigned char*)bson_iterator_bin_data(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Invalid datatype of fan data: %d[%d] %d[%d] %d[%d]\n", bson_iterator_type(&iter), bson_iterator_type(&iter)==BSON_BINDATA, (unsigned char)bson_iterator_bin_type(&iter), ((unsigned char)bson_iterator_bin_type(&iter))==BSON_BIN_USER, bson_iterator_bin_len(&iter), bson_iterator_bin_len(&iter)>0);
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "legacyEnable")==0 && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_BOOL)
+			{
+				sim->legacy_enable = bson_iterator_bool(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "gravityEnable")==0 && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_BOOL)
+			{
+				bool tempGrav = sim->ngrav_enable;
+				tempGrav = bson_iterator_bool(&iter);
+#ifndef RENDERER
+				//Change the gravity state
+				if(sim->ngrav_enable != tempGrav)
+				{
+					if(tempGrav)
+						sim->grav->start_grav_async();
+					else
+						sim->grav->stop_grav_async();
+				}
+#endif
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "waterEEnabled")==0 && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_BOOL)
+			{
+				sim->water_equal_test = bson_iterator_bool(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "paused")==0 && !sim->sys_pause)
+		{
+			if(bson_iterator_type(&iter)==BSON_BOOL)
+			{
+				sim->sys_pause = bson_iterator_bool(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "gravityMode")==0 && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_INT)
+			{
+				sim->gravityMode = bson_iterator_int(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		else if(strcmp(bson_iterator_key(&iter), "airMode")==0 && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_INT)
+			{
+				sim->air->airMode = bson_iterator_int(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}
+		/*else if((strcmp(bson_iterator_key(&iter), "leftSelectedElement")==0 || strcmp(bson_iterator_key(&iter), "rightSelectedElement")) && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_INT && bson_iterator_int(&iter) > 0 && bson_iterator_int(&iter) < PT_NUM)
+			{
+				if(bson_iterator_key(&iter)[0] == 'l')
+				{
+					sl = bson_iterator_int(&iter);
+				}
+				else
+				{
+					sr = bson_iterator_int(&iter);
+				}
+			}
+			else
+			{
+				fprintf(stderr, "Wrong type for %s\n", bson_iterator_key(&iter));
+			}
+		}*/
+		/*else if(strcmp(bson_iterator_key(&iter), "activeMenu")==0 && replace)
+		{
+			if(bson_iterator_type(&iter)==BSON_INT && bson_iterator_int(&iter) > 0 && bson_iterator_int(&iter) < SC_TOTAL && msections[bson_iterator_int(&iter)].doshow)
+			{
+				active_menu = bson_iterator_int(&iter);
+			}
+			else
+			{
+				fprintf(stderr, "Wrong value for %s\n", bson_iterator_key(&iter));
+			}
+		}*/
+	}
+
+	//Read wall and fan data
+	if(wallData)
+	{
+		j = 0;
+		if(blockW * blockH > wallDataLen)
+		{
+			fprintf(stderr, "Not enough wall data\n");
+			goto fail;
+		}
+		for(x = 0; x < blockW; x++)
+		{
+			for(y = 0; y < blockH; y++)
+			{
+				if (wallData[y*blockW+x])
+					sim->bmap[blockY+y][blockX+x] = wallData[y*blockW+x];
+				if (wallData[y*blockW+x] == WL_FAN && fanData)
+				{
+					if(j+1 >= fanDataLen)
+					{
+						fprintf(stderr, "Not enough fan data\n");
+					}
+					sim->fvx[blockY+y][blockX+x] = (fanData[j++]-127.0f)/64.0f;
+					sim->fvy[blockY+y][blockX+x] = (fanData[j++]-127.0f)/64.0f;
+				}
+			}
+		}
+	}
+
+	//Read particle data
+	if(partsData && partsPosData)
+	{
+		int newIndex = 0, fieldDescriptor, tempTemp;
+		int posCount, posTotal, partsPosDataIndex = 0;
+		int saved_x, saved_y;
+		int freeIndicesIndex = 0;
+		if(fullW * fullH * 3 > partsPosDataLen)
+		{
+			fprintf(stderr, "Not enough particle position data\n");
+			goto fail;
+		}
+		sim->parts_lastActiveIndex = NPART-1;
+		freeIndicesCount = 0;
+		freeIndices = (int*)calloc(sizeof(int), NPART);
+		for (i = 0; i<NPART; i++)
+		{
+			//Ensure ALL parts (even photons) are in the pmap so we can overwrite, keep a track of indices we can use
+			if (partsptr[i].type)
+			{
+				x = (int)(partsptr[i].x+0.5f);
+				y = (int)(partsptr[i].y+0.5f);
+				sim->pmap[y][x] = (i<<8)|1;
+			}
+			else
+				freeIndices[freeIndicesCount++] = i;
+		}
+		i = 0;
+		for (saved_y=0; saved_y<fullH; saved_y++)
+		{
+			for (saved_x=0; saved_x<fullW; saved_x++)
+			{
+				//Read total number of particles at this position
+				posTotal = 0;
+				posTotal |= partsPosData[partsPosDataIndex++]<<16;
+				posTotal |= partsPosData[partsPosDataIndex++]<<8;
+				posTotal |= partsPosData[partsPosDataIndex++];
+				//Put the next posTotal particles at this position
+				for (posCount=0; posCount<posTotal; posCount++)
+				{
+					//i+3 because we have 4 bytes of required fields (type (1), descriptor (2), temp (1))
+					if (i+3 >= partsDataLen)
+						goto fail;
+					x = saved_x + fullX;
+					y = saved_y + fullY;
+					fieldDescriptor = partsData[i+1];
+					fieldDescriptor |= partsData[i+2] << 8;
+					if(x >= XRES || x < 0 || y >= YRES || y < 0)
+					{
+						fprintf(stderr, "Out of range [%d]: %d %d, [%d, %d], [%d, %d]\n", i, x, y, (unsigned)partsData[i+1], (unsigned)partsData[i+2], (unsigned)partsData[i+3], (unsigned)partsData[i+4]);
+						goto fail;
+					}
+					if(partsData[i] >= PT_NUM)
+						partsData[i] = PT_DMND;	//Replace all invalid elements with diamond
+					if(sim->pmap[y][x])
+					{
+						//Replace existing particle or allocated block
+						newIndex = sim->pmap[y][x]>>8;
+					}
+					else if(freeIndicesIndex<freeIndicesCount)
+					{
+						//Create new particle
+						newIndex = freeIndices[freeIndicesIndex++];
+					}
+					else
+					{
+						//Nowhere to put new particle, tpt is sad :(
+						break;
+					}
+					if(newIndex < 0 || newIndex >= NPART)
+						goto fail;
+
+					//Clear the particle, ready for our new properties
+					memset(&(partsptr[newIndex]), 0, sizeof(Particle));
+
+					//Required fields
+					partsptr[newIndex].type = partsData[i];
+					partsptr[newIndex].x = x;
+					partsptr[newIndex].y = y;
+					i+=3;
+
+					//Read temp
+					if(fieldDescriptor & 0x01)
+					{
+						//Full 16bit int
+						tempTemp = partsData[i++];
+						tempTemp |= (((unsigned)partsData[i++]) << 8);
+						partsptr[newIndex].temp = tempTemp;
+					}
+					else
+					{
+						//1 Byte room temp offset
+						tempTemp = (char)partsData[i++];
+						partsptr[newIndex].temp = tempTemp+294.15f;
+					}
+
+					//Read life
+					if(fieldDescriptor & 0x02)
+					{
+						if(i >= partsDataLen) goto fail;
+						partsptr[newIndex].life = partsData[i++];
+						//Read 2nd byte
+						if(fieldDescriptor & 0x04)
+						{
+							if(i >= partsDataLen) goto fail;
+							partsptr[newIndex].life |= (((unsigned)partsData[i++]) << 8);
+						}
+					}
+
+					//Read tmp
+					if(fieldDescriptor & 0x08)
+					{
+						if(i >= partsDataLen) goto fail;
+						partsptr[newIndex].tmp = partsData[i++];
+						//Read 2nd byte
+						if(fieldDescriptor & 0x10)
+						{
+							if(i >= partsDataLen) goto fail;
+							partsptr[newIndex].tmp |= (((unsigned)partsData[i++]) << 8);
+						}
+					}
+
+					//Read ctype
+					if(fieldDescriptor & 0x20)
+					{
+						if(i >= partsDataLen) goto fail;
+						partsptr[newIndex].ctype = partsData[i++];
+						//Read additional bytes
+						if(fieldDescriptor & 0x200)
+						{
+							if(i+2 >= partsDataLen) goto fail;
+							partsptr[newIndex].ctype |= (((unsigned)partsData[i++]) << 24);
+							partsptr[newIndex].ctype |= (((unsigned)partsData[i++]) << 16);
+							partsptr[newIndex].ctype |= (((unsigned)partsData[i++]) << 8);
+						}
+					}
+
+					//Read dcolour
+					if(fieldDescriptor & 0x40)
+					{
+						if(i+3 >= partsDataLen) goto fail;
+						partsptr[newIndex].dcolour = (((unsigned)partsData[i++]) << 24);
+						partsptr[newIndex].dcolour |= (((unsigned)partsData[i++]) << 16);
+						partsptr[newIndex].dcolour |= (((unsigned)partsData[i++]) << 8);
+						partsptr[newIndex].dcolour |= ((unsigned)partsData[i++]);
+					}
+
+					//Read vx
+					if(fieldDescriptor & 0x80)
+					{
+						if(i >= partsDataLen) goto fail;
+						partsptr[newIndex].vx = (partsData[i++]-127.0f)/16.0f;
+					}
+
+					//Read vy
+					if(fieldDescriptor & 0x100)
+					{
+						if(i >= partsDataLen) goto fail;
+						partsptr[newIndex].vy = (partsData[i++]-127.0f)/16.0f;
+					}
+
+					//Read tmp2
+					if(fieldDescriptor & 0x400)
+					{
+						if(i >= partsDataLen) goto fail;
+						partsptr[newIndex].tmp2 = partsData[i++];
+					}
+
+					if ((sim->player.spwn == 1 && partsptr[newIndex].type==PT_STKM) || (sim->player2.spwn == 1 && partsptr[newIndex].type==PT_STKM2))
+					{
+						partsptr[newIndex].type = PT_NONE;
+					}
+					else if (partsptr[newIndex].type == PT_STKM)
+					{
+						//STKM_init_legs(&player, newIndex);
+						sim->player.spwn = 1;
+						sim->player.elem = PT_DUST;
+					}
+					else if (partsptr[newIndex].type == PT_STKM2)
+					{
+						//STKM_init_legs(&player2, newIndex);
+						sim->player2.spwn = 1;
+						sim->player2.elem = PT_DUST;
+					}
+					else if (partsptr[newIndex].type == PT_FIGH)
+					{
+						//TODO: 100 should be replaced with a macro
+						unsigned char fcount = 0;
+						while (fcount < 100 && fcount < (sim->fighcount+1) && sim->fighters[fcount].spwn==1) fcount++;
+						if (fcount < 100 && sim->fighters[fcount].spwn==0)
+						{
+							partsptr[newIndex].tmp = fcount;
+							sim->fighters[fcount].spwn = 1;
+							sim->fighters[fcount].elem = PT_DUST;
+							sim->fighcount++;
+							//STKM_init_legs(&(sim->fighters[sim->fcount]), newIndex);
+						}
+					}
+					if (!sim->elements[partsptr[newIndex].type].Enabled)
+						partsptr[newIndex].type = PT_NONE;
+				}
+			}
+		}
+	}
+	goto fin;
+fail:
+	//Clean up everything
+	returnCode = 1;
+fin:
+	bson_destroy(&b);
+	if(freeIndices)
+		free(freeIndices);
+	return returnCode;
 }
 
 unsigned char * SaveLoader::OPSBuild(int & dataLength, Simulation * sim, int orig_x0, int orig_y0, int orig_w, int orig_h)
 {
-	return 0;
+	Particle *partsptr = sim->parts;
+	unsigned char *partsData = NULL, *partsPosData = NULL, *fanData = NULL, *wallData = NULL, *finalData = NULL, *outputData = NULL;
+	unsigned *partsPosLink = NULL, *partsPosFirstMap = NULL, *partsPosCount = NULL, *partsPosLastMap = NULL;
+	unsigned int partsDataLen, partsPosDataLen, fanDataLen, wallDataLen, finalDataLen, outputDataLen;
+	int blockX, blockY, blockW, blockH, fullX, fullY, fullW, fullH;
+	int x, y, i, wallDataFound = 0;
+	int posCount, signsCount;
+	bson b;
+
+	//Get coords in blocks
+	blockX = orig_x0/CELL;
+	blockY = orig_y0/CELL;
+
+	//Snap full coords to block size
+	fullX = blockX*CELL;
+	fullY = blockY*CELL;
+
+	//Original size + offset of original corner from snapped corner, rounded up by adding CELL-1
+	blockW = (orig_w+orig_x0-fullX+CELL-1)/CELL;
+	blockH = (orig_h+orig_y0-fullY+CELL-1)/CELL;
+	fullW = blockW*CELL;
+	fullH = blockH*CELL;
+
+	//Copy fan and wall data
+	wallData = (unsigned char*)malloc(blockW*blockH);
+	wallDataLen = blockW*blockH;
+	fanData = (unsigned char*)malloc((blockW*blockH)*2);
+	fanDataLen = 0;
+	for(x = blockX; x < blockX+blockW; x++)
+	{
+		for(y = blockY; y < blockY+blockH; y++)
+		{
+			wallData[(y-blockY)*blockW+(x-blockX)] = sim->bmap[y][x];
+			if(sim->bmap[y][x] && !wallDataFound)
+				wallDataFound = 1;
+			if(sim->bmap[y][x]==WL_FAN)
+			{
+				i = (int)(sim->fvx[y][x]*64.0f+127.5f);
+				if (i<0) i=0;
+				if (i>255) i=255;
+				fanData[fanDataLen++] = i;
+				i = (int)(sim->fvy[y][x]*64.0f+127.5f);
+				if (i<0) i=0;
+				if (i>255) i=255;
+				fanData[fanDataLen++] = i;
+			}
+		}
+	}
+	if(!fanDataLen)
+	{
+		free(fanData);
+		fanData = NULL;
+	}
+	if(!wallDataFound)
+	{
+		free(wallData);
+		wallData = NULL;
+	}
+
+	//Index positions of all particles, using linked lists
+	//partsPosFirstMap is pmap for the first particle in each position
+	//partsPosLastMap is pmap for the last particle in each position
+	//partsPosCount is the number of particles in each position
+	//partsPosLink contains, for each particle, (i<<8)|1 of the next particle in the same position
+	partsPosFirstMap = (unsigned int *)calloc(fullW*fullH, sizeof(unsigned));
+	partsPosLastMap = (unsigned int *)calloc(fullW*fullH, sizeof(unsigned));
+	partsPosCount = (unsigned int *)calloc(fullW*fullH, sizeof(unsigned));
+	partsPosLink = (unsigned int *)calloc(NPART, sizeof(unsigned));
+	for(i = 0; i < NPART; i++)
+	{
+		if(partsptr[i].type)
+		{
+			x = (int)(partsptr[i].x+0.5f);
+			y = (int)(partsptr[i].y+0.5f);
+			if (x>=orig_x0 && x<orig_x0+orig_w && y>=orig_y0 && y<orig_y0+orig_h)
+			{
+				//Coordinates relative to top left corner of saved area
+				x -= fullX;
+				y -= fullY;
+				if (!partsPosFirstMap[y*fullW + x])
+				{
+					//First entry in list
+					partsPosFirstMap[y*fullW + x] = (i<<8)|1;
+					partsPosLastMap[y*fullW + x] = (i<<8)|1;
+				}
+				else
+				{
+					//Add to end of list
+					partsPosLink[partsPosLastMap[y*fullW + x]>>8] = (i<<8)|1;//link to current end of list
+					partsPosLastMap[y*fullW + x] = (i<<8)|1;//set as new end of list
+				}
+				partsPosCount[y*fullW + x]++;
+			}
+		}
+	}
+
+	//Store number of particles in each position
+	partsPosData = (unsigned char*)malloc(fullW*fullH*3);
+	partsPosDataLen = 0;
+	for (y=0;y<fullH;y++)
+	{
+		for (x=0;x<fullW;x++)
+		{
+			posCount = partsPosCount[y*fullW + x];
+			partsPosData[partsPosDataLen++] = (posCount&0x00FF0000)>>16;
+			partsPosData[partsPosDataLen++] = (posCount&0x0000FF00)>>8;
+			partsPosData[partsPosDataLen++] = (posCount&0x000000FF);
+		}
+	}
+
+	//Copy parts data
+	/* Field descriptor format:
+	|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|
+																					|		tmp2	|	ctype[2]	|		vy		|		vx		|	dcololour	|	ctype[1]	|		tmp[2]	|		tmp[1]	|		life[2]	|		life[1]	|	temp dbl len|
+	life[2] means a second byte (for a 16 bit field) if life[1] is present
+	*/
+	partsData = (unsigned char *)malloc(NPART * (sizeof(Particle)+1));
+	partsDataLen = 0;
+	for (y=0;y<fullH;y++)
+	{
+		for (x=0;x<fullW;x++)
+		{
+			//Find the first particle in this position
+			i = partsPosFirstMap[y*fullW + x];
+
+			//Loop while there is a pmap entry
+			while (i)
+			{
+				unsigned short fieldDesc = 0;
+				int fieldDescLoc = 0, tempTemp, vTemp;
+
+				//Turn pmap entry into a partsptr index
+				i = i>>8;
+
+				//Type (required)
+				partsData[partsDataLen++] = partsptr[i].type;
+
+				//Location of the field descriptor
+				fieldDescLoc = partsDataLen++;
+				partsDataLen++;
+
+				//Extra Temperature (2nd byte optional, 1st required), 1 to 2 bytes
+				//Store temperature as an offset of 21C(294.15K) or go into a 16byte int and store the whole thing
+				if(fabs(partsptr[i].temp-294.15f)<127)
+				{
+					tempTemp = (partsptr[i].temp-294.15f);
+					partsData[partsDataLen++] = tempTemp;
+				}
+				else
+				{
+					fieldDesc |= 1;
+					tempTemp = partsptr[i].temp;
+					partsData[partsDataLen++] = tempTemp;
+					partsData[partsDataLen++] = tempTemp >> 8;
+				}
+
+				//Life (optional), 1 to 2 bytes
+				if(partsptr[i].life)
+				{
+					fieldDesc |= 1 << 1;
+					partsData[partsDataLen++] = partsptr[i].life;
+					if(partsptr[i].life > 255)
+					{
+						fieldDesc |= 1 << 2;
+						partsData[partsDataLen++] = partsptr[i].life >> 8;
+					}
+				}
+
+				//Tmp (optional), 1 to 2 bytes
+				if(partsptr[i].tmp)
+				{
+					fieldDesc |= 1 << 3;
+					partsData[partsDataLen++] = partsptr[i].tmp;
+					if(partsptr[i].tmp > 255)
+					{
+						fieldDesc |= 1 << 4;
+						partsData[partsDataLen++] = partsptr[i].tmp >> 8;
+					}
+				}
+
+				//Ctype (optional), 1 or 4 bytes
+				if(partsptr[i].ctype)
+				{
+					fieldDesc |= 1 << 5;
+					partsData[partsDataLen++] = partsptr[i].ctype;
+					if(partsptr[i].ctype > 255)
+					{
+						fieldDesc |= 1 << 9;
+						partsData[partsDataLen++] = (partsptr[i].ctype&0xFF000000)>>24;
+						partsData[partsDataLen++] = (partsptr[i].ctype&0x00FF0000)>>16;
+						partsData[partsDataLen++] = (partsptr[i].ctype&0x0000FF00)>>8;
+					}
+				}
+
+				//Dcolour (optional), 4 bytes
+				if(partsptr[i].dcolour && (partsptr[i].dcolour & 0xFF000000))
+				{
+					fieldDesc |= 1 << 6;
+					partsData[partsDataLen++] = (partsptr[i].dcolour&0xFF000000)>>24;
+					partsData[partsDataLen++] = (partsptr[i].dcolour&0x00FF0000)>>16;
+					partsData[partsDataLen++] = (partsptr[i].dcolour&0x0000FF00)>>8;
+					partsData[partsDataLen++] = (partsptr[i].dcolour&0x000000FF);
+				}
+
+				//VX (optional), 1 byte
+				if(fabs(partsptr[i].vx) > 0.001f)
+				{
+					fieldDesc |= 1 << 7;
+					vTemp = (int)(partsptr[i].vx*16.0f+127.5f);
+					if (vTemp<0) vTemp=0;
+					if (vTemp>255) vTemp=255;
+					partsData[partsDataLen++] = vTemp;
+				}
+
+				//VY (optional), 1 byte
+				if(fabs(partsptr[i].vy) > 0.001f)
+				{
+					fieldDesc |= 1 << 8;
+					vTemp = (int)(partsptr[i].vy*16.0f+127.5f);
+					if (vTemp<0) vTemp=0;
+					if (vTemp>255) vTemp=255;
+					partsData[partsDataLen++] = vTemp;
+				}
+
+				//Tmp2 (optional), 1 byte
+				if(partsptr[i].tmp2)
+				{
+					fieldDesc |= 1 << 10;
+					partsData[partsDataLen++] = partsptr[i].tmp2;
+				}
+
+				//Write the field descriptor;
+				partsData[fieldDescLoc] = fieldDesc;
+				partsData[fieldDescLoc+1] = fieldDesc>>8;
+
+				//Get the pmap entry for the next particle in the same position
+				i = partsPosLink[i];
+			}
+		}
+	}
+	if(!partsDataLen)
+	{
+		free(partsData);
+		partsData = NULL;
+	}
+
+	bson_init(&b);
+	bson_append_bool(&b, "waterEEnabled", sim->water_equal_test);
+	bson_append_bool(&b, "legacyEnable", sim->legacy_enable);
+	bson_append_bool(&b, "gravityEnable", sim->ngrav_enable);
+	bson_append_bool(&b, "paused", sim->sys_pause);
+	bson_append_int(&b, "gravityMode", sim->gravityMode);
+	bson_append_int(&b, "airMode", sim->air->airMode);
+
+	//bson_append_int(&b, "leftSelectedElement", sl);
+	//bson_append_int(&b, "rightSelectedElement", sr);
+	//bson_append_int(&b, "activeMenu", active_menu);
+	if(partsData)
+		bson_append_binary(&b, "parts", BSON_BIN_USER, (const char *)partsData, partsDataLen);
+	if(partsPosData)
+		bson_append_binary(&b, "partsPos", BSON_BIN_USER, (const char *)partsPosData, partsPosDataLen);
+	if(wallData)
+		bson_append_binary(&b, "wallMap", BSON_BIN_USER, (const char *)wallData, wallDataLen);
+	if(fanData)
+		bson_append_binary(&b, "fanMap", BSON_BIN_USER, (const char *)fanData, fanDataLen);
+	signsCount = 0;
+	for(i = 0; i < sim->signs.size(); i++)
+	{
+		if(sim->signs[i].text.length() && sim->signs[i].x>=fullX && sim->signs[i].x<=fullX+fullW && sim->signs[i].y>=fullY && sim->signs[i].y<=fullY+fullH)
+		{
+			signsCount++;
+		}
+	}
+	if(signsCount)
+	{
+		bson_append_start_array(&b, "signs");
+		for(i = 0; i < sim->signs.size(); i++)
+		{
+			if(sim->signs[i].text.length() && sim->signs[i].x>=fullX && sim->signs[i].x<=fullX+fullW && sim->signs[i].y>=fullY && sim->signs[i].y<=fullY+fullH)
+			{
+				bson_append_start_object(&b, "sign");
+				bson_append_string(&b, "text", sim->signs[i].text.c_str());
+				bson_append_int(&b, "justification", sim->signs[i].ju);
+				bson_append_int(&b, "x", sim->signs[i].x-fullX);
+				bson_append_int(&b, "y", sim->signs[i].y-fullY);
+				bson_append_finish_object(&b);
+			}
+		}
+	}
+	bson_append_finish_array(&b);
+	bson_finish(&b);
+	bson_print(&b);
+
+	finalData = (unsigned char *)bson_data(&b);
+	finalDataLen = bson_size(&b);
+	outputDataLen = finalDataLen*2+12;
+	outputData = (unsigned char *)malloc(outputDataLen);
+
+	outputData[0] = 'O';
+	outputData[1] = 'P';
+	outputData[2] = 'S';
+	outputData[3] = '1';
+	outputData[4] = SAVE_VERSION;
+	outputData[5] = CELL;
+	outputData[6] = blockW;
+	outputData[7] = blockH;
+	outputData[8] = finalDataLen;
+	outputData[9] = finalDataLen >> 8;
+	outputData[10] = finalDataLen >> 16;
+	outputData[11] = finalDataLen >> 24;
+
+	if (BZ2_bzBuffToBuffCompress((char*)(outputData+12), &outputDataLen, (char*)finalData, bson_size(&b), 9, 0, 0) != BZ_OK)
+	{
+		puts("Save Error\n");
+		free(outputData);
+		dataLength = 0;
+		outputData = NULL;
+		goto fin;
+	}
+
+	printf("compressed data: %d\n", outputDataLen);
+	dataLength = outputDataLen + 12;
+
+fin:
+	bson_destroy(&b);
+	if(partsData)
+		free(partsData);
+	if(wallData)
+		free(wallData);
+	if(fanData)
+		free(fanData);
+
+	return outputData;
 }
 
 int SaveLoader::PSVInfo(unsigned char * data, int dataLength, int & width, int & height)
@@ -85,6 +942,10 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 	int nf=0, new_format = 0, ttv = 0;
 	Particle *parts = sim->parts;
 	int *fp = (int *)malloc(NPART*sizeof(int));
+	
+	std::vector<sign> tempSigns;
+	char tempSignText[255];
+	sign tempSign("", 0, 0, sign::Left);
 
 	//New file header uses PSv, replacing fuC. This is to detect if the client uses a new save format for temperatures
 	//This creates a problem for old clients, that display and "corrupt" error instead of a "newer version" error
@@ -113,7 +974,7 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 			}
 			if (ver>=46 && replace) {
 				sim->gravityMode = ((c[3]>>2)&0x03);// | ((c[3]>>2)&0x01);
-				sim->airMode = ((c[3]>>4)&0x07);// | ((c[3]>>4)&0x02) | ((c[3]>>4)&0x01);
+				sim->air->airMode = ((c[3]>>4)&0x07);// | ((c[3]>>4)&0x02) | ((c[3]>>4)&0x01);
 			}
 			if (ver>=49 && replace) {
 				tempGrav = ((c[3]>>7)&0x01);
@@ -165,7 +1026,7 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 	{
 		if (ver<46) {
 			sim->gravityMode = 0;
-			sim->airMode = 0;
+			sim->air->airMode = 0;
 		}
 		sim->clear_sim();
 	}
@@ -193,7 +1054,7 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 			{
 				//In old saves, ignore walls created by sign tool bug
 				//Not ignoring other invalid walls or invalid walls in new saves, so that any other bugs causing them are easier to notice, find and fix
-				if (ver<71 && d[p]==WL_SIGN)
+				if (ver<71 && d[p]==O_WL_SIGN)
 				{
 					p++;
 					continue;
@@ -226,6 +1087,39 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 					sim->bmap[y][x]=WL_EHOLE;
 				if (sim->bmap[y][x]==13)
 					sim->bmap[y][x]=WL_ALLOWGAS;
+				
+				if (sim->bmap[y][x]==O_WL_WALLELEC)
+					sim->bmap[y][x]=WL_WALLELEC;
+				if (sim->bmap[y][x]==O_WL_EWALL)
+					sim->bmap[y][x]=WL_EWALL;
+				if (sim->bmap[y][x]==O_WL_DETECT)
+					sim->bmap[y][x]=WL_DETECT;
+				if (sim->bmap[y][x]==O_WL_STREAM)
+					sim->bmap[y][x]=WL_STREAM;
+				if (sim->bmap[y][x]==O_WL_FAN||sim->bmap[y][x]==O_WL_FANHELPER)
+					sim->bmap[y][x]=WL_FAN;
+				if (sim->bmap[y][x]==O_WL_ALLOWLIQUID)
+					sim->bmap[y][x]=WL_ALLOWLIQUID;
+				if (sim->bmap[y][x]==O_WL_DESTROYALL)
+					sim->bmap[y][x]=WL_DESTROYALL;
+				if (sim->bmap[y][x]==O_WL_ERASE)
+					sim->bmap[y][x]=WL_ERASE;
+				if (sim->bmap[y][x]==O_WL_WALL)
+					sim->bmap[y][x]=WL_WALL;
+				if (sim->bmap[y][x]==O_WL_ALLOWAIR)
+					sim->bmap[y][x]=WL_ALLOWAIR;
+				if (sim->bmap[y][x]==O_WL_ALLOWSOLID)
+					sim->bmap[y][x]=WL_ALLOWSOLID;
+				if (sim->bmap[y][x]==O_WL_ALLOWALLELEC)
+					sim->bmap[y][x]=WL_ALLOWALLELEC;
+				if (sim->bmap[y][x]==O_WL_EHOLE)
+					sim->bmap[y][x]=WL_EHOLE;
+				if (sim->bmap[y][x]==O_WL_ALLOWGAS)
+					sim->bmap[y][x]=WL_ALLOWGAS;
+				if (sim->bmap[y][x]==O_WL_GRAV)
+					sim->bmap[y][x]=WL_GRAV;
+				if (sim->bmap[y][x]==O_WL_ALLOWENERGY)
+					sim->bmap[y][x]=WL_ALLOWENERGY;
 			}
 
 			p++;
@@ -496,7 +1390,7 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 			}
 			else
 			{
-				parts[i-1].temp = sim->ptypes[parts[i-1].type].heat;
+				parts[i-1].temp = sim->elements[parts[i-1].type].Temperature;
 			}
 		}
 	}
@@ -546,6 +1440,11 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 					sim->fighcount++;
 					//STKM_init_legs(&(fighters[fcount]), i-1);
 				}
+			}
+			else if (parts[i-1].type == PT_SPNG)
+			{
+				if (fabs(parts[i-1].vx)>0.0f || fabs(parts[i-1].vy)>0.0f)
+					parts[i-1].flags |= FLAG_MOVABLE;
 			}
 
 			if (ver<48 && (ty==OLD_PT_WIND || (ty==PT_BRAY&&parts[i-1].life==0)))
@@ -601,7 +1500,7 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 					parts[i-1].tmp2 = parts[i-1].life;
 				}
 			}
-			if (!sim->ptypes[parts[i-1].type].enabled)
+			if (!sim->elements[parts[i-1].type].Enabled)
 				parts[i-1].type = PT_NONE;
 		}
 	}
@@ -626,30 +1525,31 @@ int SaveLoader::PSVLoad(unsigned char * data, int dataLength, Simulation * sim, 
 	{
 		if (p+6 > dataLength)
 			goto corrupt;
-		for (k=0; k<MAXSIGNS; k++)
-			if (!sim->signs[k].text[0])
-				break;
 		x = d[p++];
 		x |= ((unsigned)d[p++])<<8;
-		if (k<MAXSIGNS)
-			sim->signs[k].x = x+x0;
+		tempSign.x = x+x0;
 		x = d[p++];
 		x |= ((unsigned)d[p++])<<8;
-		if (k<MAXSIGNS)
-			sim->signs[k].y = x+y0;
+		tempSign.y = x+y0;
 		x = d[p++];
-		if (k<MAXSIGNS)
-			sim->signs[k].ju = x;
+		tempSign.ju = (sign::Justification)x;
 		x = d[p++];
 		if (p+x > dataLength)
-			goto corrupt;
-		if (k<MAXSIGNS)
-		{
-			memcpy(sim->signs[k].text, d+p, x);
-			sim->signs[k].text[x] = 0;
-			//clean_text(signs[k].text, 158-14 /* Current max sign length */); //TODO: Text cleanup for signs
-		}
+		goto corrupt;
+		if(x>254)
+			x = 254;
+		memcpy(tempSignText, d+p, x);
+		tempSignText[x] = 0;
+		tempSign.text = tempSignText;
+		tempSigns.push_back(tempSign);
 		p += x;
+	}
+	
+	for (i = 0; i < tempSigns.size(); i++)
+	{
+		if(i == MAXSIGNS)
+			break;
+		sim->signs.push_back(tempSigns[i]);
 	}
 
 version1:
@@ -829,14 +1729,14 @@ unsigned char * SaveLoader::PSVBuild(int & dataLength, Simulation * sim, int ori
 	}
 
 	j = 0;
-	for (i=0; i<MAXSIGNS; i++)
-		if (sim->signs[i].text[0] &&
+	for (i=0; i<sim->signs.size(); i++)
+		if (sim->signs[i].text.length() &&
 				sim->signs[i].x>=x0 && sim->signs[i].x<x0+w &&
 				sim->signs[i].y>=y0 && sim->signs[i].y<y0+h)
 			j++;
 	d[p++] = j;
-	for (i=0; i<MAXSIGNS; i++)
-		if (sim->signs[i].text[0] &&
+	for (i=0; i<sim->signs.size(); i++)
+		if (sim->signs[i].text.length() &&
 				sim->signs[i].x>=x0 && sim->signs[i].x<x0+w &&
 				sim->signs[i].y>=y0 && sim->signs[i].y<y0+h)
 		{
@@ -845,9 +1745,9 @@ unsigned char * SaveLoader::PSVBuild(int & dataLength, Simulation * sim, int ori
 			d[p++] = (sim->signs[i].y-y0);
 			d[p++] = (sim->signs[i].y-y0)>>8;
 			d[p++] = sim->signs[i].ju;
-			x = strlen(sim->signs[i].text);
+			x = sim->signs[i].text.length();
 			d[p++] = x;
-			memcpy(d+p, sim->signs[i].text, x);
+			memcpy(d+p, sim->signs[i].text.c_str(), x);
 			p+=x;
 		}
 
@@ -860,7 +1760,7 @@ unsigned char * SaveLoader::PSVBuild(int & dataLength, Simulation * sim, int ori
 	c[0] = 0x50;	//0x66;
 	c[1] = 0x53;	//0x75;
 	c[2] = 0x76;	//0x43;
-	c[3] = sim->legacy_enable|((sim->sys_pause<<1)&0x02)|((sim->gravityMode<<2)&0x0C)|((sim->airMode<<4)&0x70)|((sim->ngrav_enable<<7)&0x80);
+	c[3] = sim->legacy_enable|((sim->sys_pause<<1)&0x02)|((sim->gravityMode<<2)&0x0C)|((sim->air->airMode<<4)&0x70)|((sim->ngrav_enable<<7)&0x80);
 	c[4] = SAVE_VERSION;
 	c[5] = CELL;
 	c[6] = bw;
