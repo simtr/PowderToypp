@@ -170,7 +170,7 @@ int Graphics::drawtext(int x, int y, std::string s, int r, int g, int b, int a)
 	return drawtext(x, y, s.c_str(), r, g, b, a);
 }
 
-TPT_INLINE int Graphics::drawchar(int x, int y, int c, int r, int g, int b, int a)
+int Graphics::drawchar(int x, int y, int c, int r, int g, int b, int a)
 {
 	int i, j, w, bn = 0, ba = 0;
 	char *rp = font_data + font_ptrs[c];
@@ -200,7 +200,7 @@ TPT_INLINE int Graphics::drawchar(int x, int y, int c, int r, int g, int b, int 
 	return x + w;
 }
 
-TPT_INLINE int Graphics::addchar(int x, int y, int c, int r, int g, int b, int a)
+int Graphics::addchar(int x, int y, int c, int r, int g, int b, int a)
 {
 	int i, j, w, bn = 0, ba = 0;
 	char *rp = font_data + font_ptrs[c];
@@ -237,12 +237,12 @@ TPT_INLINE void Graphics::xor_pixel(int x, int y)
 	//OpenGL doesn't support single pixel manipulation, there are ways around it, but with poor performance
 }
 
-TPT_INLINE void Graphics::blendpixel(int x, int y, int r, int g, int b, int a)
+void Graphics::blendpixel(int x, int y, int r, int g, int b, int a)
 {
 	//OpenGL doesn't support single pixel manipulation, there are ways around it, but with poor performance
 }
 
-TPT_INLINE void Graphics::addpixel(int x, int y, int r, int g, int b, int a)
+void Graphics::addpixel(int x, int y, int r, int g, int b, int a)
 {
 	//OpenGL doesn't support single pixel manipulation, there are ways around it, but with poor performance
 }

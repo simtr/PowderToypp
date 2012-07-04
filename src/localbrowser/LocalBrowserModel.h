@@ -26,7 +26,7 @@ class LocalBrowserModel {
 	void notifySelectedChanged();
 public:
 	LocalBrowserModel();
-	int GetPageCount() { return max(1, (int)(ceil(stampIDs.size()/16))); }
+	int GetPageCount() { return max(1, (int)(ceil(stampIDs.size()/16.0f))); }
 	int GetPageNum() { return currentPage; }
 	void AddObserver(LocalBrowserView * observer);
 	std::vector<SaveFile *> GetSavesList();

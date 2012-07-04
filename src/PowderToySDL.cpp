@@ -1,9 +1,9 @@
 #ifdef USE_SDL
 
 #include <time.h>
-#include "SDL.h"
+#include "SDL/SDL.h"
 #ifdef WIN32
-#include "SDL_syswm.h"
+#include "SDL/SDL_syswm.h"
 #endif
 #include <iostream>
 #include <sstream>

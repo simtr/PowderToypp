@@ -6,7 +6,11 @@
  */
 
 
+#if defined WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 #include "Task.h"
 #include "TaskListener.h"
 
@@ -117,7 +121,11 @@ bool Task::doWork()
 	for(int i = 0; i < 100; i++)
 	{
 		notifyProgress(i);
+#if defined WIN32
+		Sleep(100);
+#else
 		usleep((100)*1000);
+#endif
 	}
 	return true;
 }

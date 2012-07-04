@@ -65,12 +65,12 @@ bool Button::GetTogglable()
 	return isTogglable;
 }
 
-inline bool Button::GetToggleState()
+bool Button::GetToggleState()
 {
 	return toggle;
 }
 
-inline void Button::SetToggleState(bool state)
+void Button::SetToggleState(bool state)
 {
 	toggle = state;
 }

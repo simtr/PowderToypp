@@ -85,7 +85,7 @@ void TagsView::NotifyTagsChanged(TagsModel * sender)
 			tags.push_back(tempLabel);
 			AddComponent(tempLabel);
 
-			if(sender->GetSave()->GetUserName()==Client::Ref().GetAuthUser().Username)
+			if(sender->GetSave()->Get_UserName()==Client::Ref().GetAuthUser().Username)
 			{
 				ui::Button * tempButton = new ui::Button(ui::Point(15, 35+(16*i)), ui::Point(14, 14), "x");
 				tempButton->Appearance.HorizontalAlign = ui::Appearance::AlignCentre;				tempButton->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;

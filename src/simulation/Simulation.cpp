@@ -1465,7 +1465,7 @@ void *Simulation::transform_save(void *odata, int *size, matrix2d transform, vec
 	return ndata;
 }
 
-inline void Simulation::orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[])
+void Simulation::orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[])
 {
 	resblock1[0] = (block1&0x000000FF);
 	resblock1[1] = (block1&0x0000FF00)>>8;
@@ -1478,7 +1478,7 @@ inline void Simulation::orbitalparts_get(int block1, int block2, int resblock1[]
 	resblock2[3] = (block2&0xFF000000)>>24;
 }
 
-inline void Simulation::orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[])
+void Simulation::orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[])
 {
 	int block1tmp = 0;
 	int block2tmp = 0;

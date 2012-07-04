@@ -5,7 +5,11 @@
  *      Author: Simon
  */
 #include <sstream>
+#if defined WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 
 #include "client/Client.h"
 #include "LocalBrowserController.h"
@@ -75,7 +79,11 @@ void LocalBrowserController::removeSelectedC()
 				saveName << "Deleting save [" << saves[i] << "] ...";
  				notifyStatus(saveName.str());
  				Client::Ref().DeleteStamp(saves[i]);
+#ifdef WIN32
+				Sleep(100);
+#else
 				usleep(100*1000);
+#endif
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
 			return true;
