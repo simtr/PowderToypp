@@ -84,7 +84,11 @@ enum Icon
 };
 
 //"Graphics lite" - slightly lower performance due to variable size,
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) VideoBuffer
+#else
 class VideoBuffer
+#endif
 {
 public:
 	pixel * Buffer;

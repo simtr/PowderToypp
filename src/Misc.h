@@ -27,9 +27,15 @@ char *exe_name(void);
 //Signum function
 int isign(float i);
 
+#if defined(WIN32) && !defined(__GNUC__)
+__declspec(dllexport) unsigned clamp_flt(float f, float min, float max);
+
+__declspec(dllexport) float restrict_flt(float f, float min, float max);
+#else
 unsigned clamp_flt(float f, float min, float max);
 
 float restrict_flt(float f, float min, float max);
+#endif
 
 char *mystrdup(char *s);
 
