@@ -58,7 +58,7 @@ void SaveInfo::SetUserName(string userName) {
 	this->userName = userName;
 }
 
-string SaveInfo::GetUserName() {
+string SaveInfo::Get_UserName() {
 	return userName;
 }
 

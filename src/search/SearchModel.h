@@ -47,7 +47,7 @@ public:
 	void UpdateSaveList(int pageNumber, std::string query);
 	vector<SaveInfo*> GetSaveList();
 	string GetLastError() { return lastError; }
-	int GetPageCount() { return max(1, (int)(ceil(resultCount/16))); }
+	int GetPageCount() { return max(1, (int)(ceil(resultCount/16.0f))); }
 	int GetPageNum() { return currentPage; }
 	std::string GetLastQuery() { return lastQuery; }
 	void SetSort(string sort) { currentSort = sort; notifySortChanged(); }

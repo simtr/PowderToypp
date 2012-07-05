@@ -36,7 +36,11 @@ class Air;
 class GameSave;
 
 //#ifdef _cplusplus
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Simulation
+#else
 class Simulation
+#endif
 {
 private:
 public:

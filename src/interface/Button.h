@@ -24,7 +24,11 @@ public:
 	virtual ~ButtonAction() {}
 };
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Button : public Component
+#else
 class Button : public Component
+#endif
 {
 public:
 	Button(Point position = Point(0, 0), Point size = Point(0, 0), std::string buttonText = "");

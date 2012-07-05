@@ -123,7 +123,7 @@ int Element_SPRK::update(UPDATE_FUNC_ARGS)
 								parts[i].life=60;
 							parts[p].temp=parts[p].life*parts[i].tmp/2.5;
 							parts[p].tmp2=1;
-							parts[p].tmp=acos(1.0*rx/sqrt(rx*rx+ry*ry))/M_PI*360;
+							parts[p].tmp=acos(1.0*rx/sqrt((float)rx*rx+ry*ry))/M_PI*360;
 							parts[i].temp-=parts[i].tmp*2+parts[i].temp/5; // slight self-cooling
 							if (fabs(sim->pv[y/CELL][x/CELL])!=0.0f)
 							{

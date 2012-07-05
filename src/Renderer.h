@@ -25,7 +25,11 @@ struct gcache_item
 };
 typedef struct gcache_item gcache_item;
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Renderer
+#else
 class Renderer
+#endif
 {
 public:
 	std::vector<unsigned int> render_modes;

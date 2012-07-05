@@ -1,6 +1,10 @@
 #include <string>
 #include <sstream>
+#if defined WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 #include "SearchController.h"
 #include "SearchModel.h"
 #include "SearchView.h"
@@ -210,9 +214,15 @@ void SearchController::removeSelectedC()
  					std::stringstream saveIDF;
  					saveIDF << "\boFailed to delete [" << saves[i] << "] ...";
 					notifyStatus(saveIDF.str());
+#ifdef WIN32
+					Sleep(500);
+				}
+				Sleep(100);
+#else
 					usleep(500*1000);
 				}
 				usleep(100*1000);
+#endif
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
 			return true;
@@ -264,9 +274,15 @@ void SearchController::unpublishSelectedC()
  					std::stringstream saveIDF;
  					saveIDF << "\boFailed to hide [" << saves[i] << "] ...";
 					notifyStatus(saveIDF.str());
+#ifdef WIN32
+					Sleep(500);
+				}
+				Sleep(100);
+#else
 					usleep(500*1000);
 				}
 				usleep(100*1000);
+#endif
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
 			return true;
@@ -298,9 +314,15 @@ void SearchController::FavouriteSelected()
 					std::stringstream saveIDF;
 					saveIDF << "\boFailed to favourite [" << saves[i] << "] ...";
 					notifyStatus(saveIDF.str());
+#ifdef WIN32
+					Sleep(500);
+				}
+				Sleep(100);
+#else
 					usleep(500*1000);
 				}
 				usleep(100*1000);
+#endif
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
 			return true;

@@ -35,7 +35,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace json
 {
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Writer : private ConstVisitor
+#else
 class Writer : private ConstVisitor
+#endif
 {
 public:
    static void Write(const Object& object, std::ostream& ostr);

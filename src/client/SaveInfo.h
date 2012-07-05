@@ -45,7 +45,7 @@ public:
 	string GetName();
 
 	void SetUserName(string userName);
-	string GetUserName();
+	string Get_UserName();
 
 	void SetID(int id);
 	int GetID();

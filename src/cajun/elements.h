@@ -57,7 +57,21 @@ namespace Version
 /////////////////////////////////////////////////
 // forward declarations (more info further below)
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Visitor;
+class __declspec(dllexport) ConstVisitor;
 
+template <typename ValueTypeT>
+class __declspec(dllexport) TrivialType_T;
+
+typedef TrivialType_T<double> Number;
+typedef TrivialType_T<bool> Boolean;
+typedef TrivialType_T<std::string> String;
+
+class __declspec(dllexport) Object;
+class __declspec(dllexport) Array;
+class __declspec(dllexport) Null;
+#else
 class Visitor;
 class ConstVisitor;
 
@@ -71,6 +85,7 @@ typedef TrivialType_T<std::string> String;
 class Object;
 class Array;
 class Null;
+#endif
 
 
 
@@ -101,7 +116,11 @@ public:
 //  String str = objInvoices[1]["Customer"]["Company"];
 
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) UnknownElement
+#else
 class UnknownElement
+#endif
 {
 public:
    UnknownElement();

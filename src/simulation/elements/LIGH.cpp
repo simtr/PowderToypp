@@ -158,7 +158,7 @@ int Element_LIGH::update(UPDATE_FUNC_ARGS)
 		rx=parts[pNear].x-x;
 		ry=parts[pNear].y-y;
 		if (rx*rx+ry*ry!=0)
-			n_angle = asin(-ry/sqrt(rx*rx+ry*ry));
+			n_angle = asin(-ry/sqrt((float)rx*rx+ry*ry));
 		else
 			n_angle = 0;
 		if (n_angle<0)
