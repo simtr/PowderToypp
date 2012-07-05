@@ -78,7 +78,7 @@ Thumbnail * SaveRenderer::Render(GameSave * save)
 				unsigned char green = texData[((((YRES-1-y)*XRES)+x)*4)+1];
 				unsigned char blue = texData[((((YRES-1-y)*XRES)+x)*4)+2];
 
-				pData[(y*(width*CELL))+x] = PIXRGB(red, green, blue);
+				pData[(y*(width*CELL))+x] = PIXRGBA(red, green, blue, 255);
 			}
 		}
 
