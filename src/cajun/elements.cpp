@@ -44,7 +44,7 @@ namespace json
 {
 
 
-Exception::Exception(const std::string& sMessage) :
+inline Exception::Exception(const std::string& sMessage) :
    std::runtime_error(sMessage) {}
 
 
@@ -129,32 +129,32 @@ public:
 
 
 
-UnknownElement::UnknownElement() :                               m_pImp( new Imp_T<Null>( Null() ) ) {}
-UnknownElement::UnknownElement(const UnknownElement& unknown) :  m_pImp( unknown.m_pImp->Clone()) {}
-UnknownElement::UnknownElement(const Object& object) :           m_pImp( new Imp_T<Object>(object) ) {}
-UnknownElement::UnknownElement(const Array& array) :             m_pImp( new Imp_T<Array>(array) ) {}
-UnknownElement::UnknownElement(const Number& number) :           m_pImp( new Imp_T<Number>(number) ) {}
-UnknownElement::UnknownElement(const Boolean& boolean) :         m_pImp( new Imp_T<Boolean>(boolean) ) {}
-UnknownElement::UnknownElement(const String& string) :           m_pImp( new Imp_T<String>(string) ) {}
-UnknownElement::UnknownElement(const Null& null) :               m_pImp( new Imp_T<Null>(null) ) {}
+inline UnknownElement::UnknownElement() :                               m_pImp( new Imp_T<Null>( Null() ) ) {}
+inline UnknownElement::UnknownElement(const UnknownElement& unknown) :  m_pImp( unknown.m_pImp->Clone()) {}
+inline UnknownElement::UnknownElement(const Object& object) :           m_pImp( new Imp_T<Object>(object) ) {}
+inline UnknownElement::UnknownElement(const Array& array) :             m_pImp( new Imp_T<Array>(array) ) {}
+inline UnknownElement::UnknownElement(const Number& number) :           m_pImp( new Imp_T<Number>(number) ) {}
+inline UnknownElement::UnknownElement(const Boolean& boolean) :         m_pImp( new Imp_T<Boolean>(boolean) ) {}
+inline UnknownElement::UnknownElement(const String& string) :           m_pImp( new Imp_T<String>(string) ) {}
+inline UnknownElement::UnknownElement(const Null& null) :               m_pImp( new Imp_T<Null>(null) ) {}
 
-UnknownElement::~UnknownElement()   { delete m_pImp; }
+inline UnknownElement::~UnknownElement()   { delete m_pImp; }
 
-UnknownElement::operator const Object& () const    { return CastTo<Object>(); }
-UnknownElement::operator const Array& () const     { return CastTo<Array>(); }
-UnknownElement::operator const Number& () const    { return CastTo<Number>(); }
-UnknownElement::operator const Boolean& () const   { return CastTo<Boolean>(); }
-UnknownElement::operator const String& () const    { return CastTo<String>(); }
-UnknownElement::operator const Null& () const      { return CastTo<Null>(); }
+inline UnknownElement::operator const Object& () const    { return CastTo<Object>(); }
+inline UnknownElement::operator const Array& () const     { return CastTo<Array>(); }
+inline UnknownElement::operator const Number& () const    { return CastTo<Number>(); }
+inline UnknownElement::operator const Boolean& () const   { return CastTo<Boolean>(); }
+inline UnknownElement::operator const String& () const    { return CastTo<String>(); }
+inline UnknownElement::operator const Null& () const      { return CastTo<Null>(); }
 
-UnknownElement::operator Object& ()    { return ConvertTo<Object>(); }
-UnknownElement::operator Array& ()     { return ConvertTo<Array>(); }
-UnknownElement::operator Number& ()    { return ConvertTo<Number>(); }
-UnknownElement::operator Boolean& ()   { return ConvertTo<Boolean>(); }
-UnknownElement::operator String& ()    { return ConvertTo<String>(); }
-UnknownElement::operator Null& ()      { return ConvertTo<Null>(); }
+inline UnknownElement::operator Object& ()    { return ConvertTo<Object>(); }
+inline UnknownElement::operator Array& ()     { return ConvertTo<Array>(); }
+inline UnknownElement::operator Number& ()    { return ConvertTo<Number>(); }
+inline UnknownElement::operator Boolean& ()   { return ConvertTo<Boolean>(); }
+inline UnknownElement::operator String& ()    { return ConvertTo<String>(); }
+inline UnknownElement::operator Null& ()      { return ConvertTo<Null>(); }
 
-UnknownElement& UnknownElement::operator = (const UnknownElement& unknown) 
+inline UnknownElement& UnknownElement::operator = (const UnknownElement& unknown) 
 {
    // always check for this
    if (&unknown != this)
@@ -170,28 +170,28 @@ UnknownElement& UnknownElement::operator = (const UnknownElement& unknown)
    return *this;
 }
 
-UnknownElement& UnknownElement::operator[] (const std::string& key)
+inline UnknownElement& UnknownElement::operator[] (const std::string& key)
 {
    // the people want an object. make us one if we aren't already
    Object& object = ConvertTo<Object>();
    return object[key];
 }
 
-const UnknownElement& UnknownElement::operator[] (const std::string& key) const
+inline const UnknownElement& UnknownElement::operator[] (const std::string& key) const
 {
    // throws if we aren't an object
    const Object& object = CastTo<Object>();
    return object[key];
 }
 
-UnknownElement& UnknownElement::operator[] (size_t index)
+inline UnknownElement& UnknownElement::operator[] (size_t index)
 {
    // the people want an array. make us one if we aren't already
    Array& array = ConvertTo<Array>();
    return array[index];
 }
 
-const UnknownElement& UnknownElement::operator[] (size_t index) const
+inline const UnknownElement& UnknownElement::operator[] (size_t index) const
 {
    // throws if we aren't an array
    const Array& array = CastTo<Array>();
@@ -227,11 +227,11 @@ ElementTypeT& UnknownElement::ConvertTo()
 }
 
 
-void UnknownElement::Accept(ConstVisitor& visitor) const { m_pImp->Accept(visitor); }
-void UnknownElement::Accept(Visitor& visitor)            { m_pImp->Accept(visitor); }
+inline void UnknownElement::Accept(ConstVisitor& visitor) const { m_pImp->Accept(visitor); }
+inline void UnknownElement::Accept(Visitor& visitor)            { m_pImp->Accept(visitor); }
 
 
-bool UnknownElement::operator == (const UnknownElement& element) const
+inline bool UnknownElement::operator == (const UnknownElement& element) const
 {
    return m_pImp->Compare(*element.m_pImp);
 }
@@ -242,10 +242,10 @@ bool UnknownElement::operator == (const UnknownElement& element) const
 // Object members
 
 
-Object::Member::Member(const std::string& nameIn, const UnknownElement& elementIn) :
+inline Object::Member::Member(const std::string& nameIn, const UnknownElement& elementIn) :
    name(nameIn), element(elementIn) {}
 
-bool Object::Member::operator == (const Member& member) const 
+inline bool Object::Member::operator == (const Member& member) const 
 {
    return name == member.name &&
           element == member.element;
@@ -265,30 +265,30 @@ private:
 
 
 
-Object::iterator Object::Begin() { return m_Members.begin(); }
-Object::iterator Object::End() { return m_Members.end(); }
-Object::const_iterator Object::Begin() const { return m_Members.begin(); }
-Object::const_iterator Object::End() const { return m_Members.end(); }
+inline Object::iterator Object::Begin() { return m_Members.begin(); }
+inline Object::iterator Object::End() { return m_Members.end(); }
+inline Object::const_iterator Object::Begin() const { return m_Members.begin(); }
+inline Object::const_iterator Object::End() const { return m_Members.end(); }
 
-size_t Object::Size() const { return m_Members.size(); }
-bool Object::Empty() const { return m_Members.empty(); }
+inline size_t Object::Size() const { return m_Members.size(); }
+inline bool Object::Empty() const { return m_Members.empty(); }
 
-Object::iterator Object::Find(const std::string& name) 
+inline Object::iterator Object::Find(const std::string& name) 
 {
    return std::find_if(m_Members.begin(), m_Members.end(), Finder(name));
 }
 
-Object::const_iterator Object::Find(const std::string& name) const 
+inline Object::const_iterator Object::Find(const std::string& name) const 
 {
    return std::find_if(m_Members.begin(), m_Members.end(), Finder(name));
 }
 
-Object::iterator Object::Insert(const Member& member)
+inline Object::iterator Object::Insert(const Member& member)
 {
    return Insert(member, End());
 }
 
-Object::iterator Object::Insert(const Member& member, iterator itWhere)
+inline Object::iterator Object::Insert(const Member& member, iterator itWhere)
 {
    iterator it = Find(member.name);
    if (it != m_Members.end())
@@ -298,12 +298,12 @@ Object::iterator Object::Insert(const Member& member, iterator itWhere)
    return it;
 }
 
-Object::iterator Object::Erase(iterator itWhere) 
+inline Object::iterator Object::Erase(iterator itWhere) 
 {
    return m_Members.erase(itWhere);
 }
 
-UnknownElement& Object::operator [](const std::string& name)
+inline UnknownElement& Object::operator [](const std::string& name)
 {
 
    iterator it = Find(name);
@@ -315,7 +315,7 @@ UnknownElement& Object::operator [](const std::string& name)
    return it->element;      
 }
 
-const UnknownElement& Object::operator [](const std::string& name) const 
+inline const UnknownElement& Object::operator [](const std::string& name) const 
 {
    const_iterator it = Find(name);
    if (it == End())
@@ -323,12 +323,12 @@ const UnknownElement& Object::operator [](const std::string& name) const
    return it->element;
 }
 
-void Object::Clear() 
+inline void Object::Clear() 
 {
    m_Members.clear(); 
 }
 
-bool Object::operator == (const Object& object) const 
+inline bool Object::operator == (const Object& object) const 
 {
    return m_Members == object.m_Members;
 }
@@ -337,35 +337,35 @@ bool Object::operator == (const Object& object) const
 /////////////////
 // Array members
 
-Array::iterator Array::Begin()  { return m_Elements.begin(); }
-Array::iterator Array::End()    { return m_Elements.end(); }
-Array::const_iterator Array::Begin() const  { return m_Elements.begin(); }
-Array::const_iterator Array::End() const    { return m_Elements.end(); }
+inline Array::iterator Array::Begin()  { return m_Elements.begin(); }
+inline Array::iterator Array::End()    { return m_Elements.end(); }
+inline Array::const_iterator Array::Begin() const  { return m_Elements.begin(); }
+inline Array::const_iterator Array::End() const    { return m_Elements.end(); }
 
-Array::iterator Array::Insert(const UnknownElement& element, iterator itWhere)
+inline Array::iterator Array::Insert(const UnknownElement& element, iterator itWhere)
 { 
    return m_Elements.insert(itWhere, element);
 }
 
-Array::iterator Array::Insert(const UnknownElement& element)
+inline Array::iterator Array::Insert(const UnknownElement& element)
 {
    return Insert(element, End());
 }
 
-Array::iterator Array::Erase(iterator itWhere)
+inline Array::iterator Array::Erase(iterator itWhere)
 { 
    return m_Elements.erase(itWhere);
 }
 
-void Array::Resize(size_t newSize)
+inline void Array::Resize(size_t newSize)
 {
    m_Elements.resize(newSize);
 }
 
-size_t Array::Size() const  { return m_Elements.size(); }
-bool Array::Empty() const   { return m_Elements.empty(); }
+inline size_t Array::Size() const  { return m_Elements.size(); }
+inline bool Array::Empty() const   { return m_Elements.empty(); }
 
-UnknownElement& Array::operator[] (size_t index)
+inline UnknownElement& Array::operator[] (size_t index)
 {
    size_t nMinSize = index + 1; // zero indexed
    if (m_Elements.size() < nMinSize)
@@ -373,18 +373,18 @@ UnknownElement& Array::operator[] (size_t index)
    return m_Elements[index]; 
 }
 
-const UnknownElement& Array::operator[] (size_t index) const 
+inline const UnknownElement& Array::operator[] (size_t index) const 
 {
    if (index >= m_Elements.size())
       throw Exception("Array out of bounds");
    return m_Elements[index]; 
 }
 
-void Array::Clear() {
+inline void Array::Clear() {
    m_Elements.clear();
 }
 
-bool Array::operator == (const Array& array) const
+inline bool Array::operator == (const Array& array) const
 {
    return m_Elements == array.m_Elements;
 }
@@ -393,7 +393,7 @@ bool Array::operator == (const Array& array) const
 //////////////////
 // Null members
 
-bool Null::operator == (const Null& trivial) const
+inline bool Null::operator == (const Null& trivial) const
 {
    return true;
 }

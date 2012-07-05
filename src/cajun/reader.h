@@ -38,7 +38,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace json
 {
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Reader
+#else
 class Reader
+#endif
 {
 public:
    // this structure will be reported in one of the exceptions defined below

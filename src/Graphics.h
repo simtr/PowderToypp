@@ -104,7 +104,11 @@ public:
 	~VideoBuffer() { free(Buffer); };
 };
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Graphics
+#else
 class Graphics
+#endif
 {
 public:
 	pixel *vid;

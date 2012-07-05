@@ -36,7 +36,11 @@ class Air;
 class GameSave;
 
 //#ifdef _cplusplus
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Simulation
+#else
 class Simulation
+#endif
 {
 private:
 public:
@@ -145,7 +149,7 @@ public:
 	inline int is_wire(int x, int y);
 	inline int is_wire_off(int x, int y);
 	inline void set_emap(int x, int y);
-	int parts_avg(int ci, int ni, int t);
+	inline int parts_avg(int ci, int ni, int t);
 	void create_arc(int sx, int sy, int dx, int dy, int midpoints, int variance, int type, int flags);
 	int nearest_part(int ci, int t, int max_d);
 	void update_particles_i(int start, int inc);
@@ -178,8 +182,8 @@ public:
 	void ApplyDecorationBox(int x1, int y1, int x2, int y2, int colR, int colG, int colB, int colA, int mode);
 	
 	void *transform_save(void *odata, int *size, matrix2d transform, vector2d translate);
-	void orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[]);
-	void orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[]);
+	inline void orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[]);
+	inline void orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[]);
 	inline int get_wavelength_bin(int *wm);
 	inline int get_normal(int pt, int x, int y, float dx, float dy, float *nx, float *ny);
 	inline int get_normal_interp(int pt, float x0, float y0, float dx, float dy, float *nx, float *ny);

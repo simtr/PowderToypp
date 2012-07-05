@@ -24,7 +24,11 @@ public:
 	virtual ~ButtonAction() {}
 };
 
+#if defined(WIN32) && !defined(__GNUC__)
+class __declspec(dllexport) Button : public Component
+#else
 class Button : public Component
+#endif
 {
 public:
 	Button(Point position = Point(0, 0), Point size = Point(0, 0), std::string buttonText = "");
@@ -47,8 +51,8 @@ public:
 	virtual void DoAction(); //action of button what ever it may be
 	void SetTogglable(bool isTogglable);
 	bool GetTogglable();
-	bool GetToggleState();
-	void SetToggleState(bool state);
+	inline bool GetToggleState();
+	inline void SetToggleState(bool state);
 	void SetActionCallback(ButtonAction * action);
 	ButtonAction * GetActionCallback() { return actionCallback; }
 	void SetText(std::string buttonText);
