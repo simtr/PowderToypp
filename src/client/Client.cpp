@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <time.h>
 #include <stdio.h>
+#include <deque>
 
 #ifdef WIN32
 #include <direct.h>
@@ -17,15 +18,20 @@
 #include "Config.h"
 #include "Client.h"
 #include "MD5.h"
-#include "Graphics.h"
+#include "graphics/Graphics.h"
 #include "Misc.h"
 
 #include "interface/Point.h"
 
 #include "client/SaveInfo.h"
 
+#include "ClientListener.h"
+
+#include "Update.h"
+
 Client::Client():
-	authUser(0, "")
+	authUser(0, ""),
+	updateAvailable(false)
 {
 	int i = 0;
 	std::string proxyString("");
@@ -72,19 +78,17 @@ Client::Client():
 				authUser = User(0, "");
 				std::cerr << "Error: Client [Read User data from pref] " << e.what() << std::endl;
 			}
-			try
-			{
-				proxyString = ((json::String)(configDocument["Proxy"])).Value();
-			}
-			catch (json::Exception &e)
-			{
-				proxyString = "";
-				std::cerr << "Error: Client [Read Proxy from pref] " << e.what() << std::endl;
-			}
 		}
 		configFile.close();
 	}
 
+	if(GetPrefBool("version.update", false)==true)
+	{
+		SetPref("version.update", false);
+		update_finish();
+	}
+
+	proxyString = GetPrefString("proxy", "");
 	if(proxyString.length())
 	{
 		http_init((char *)proxyString.c_str());
@@ -108,9 +112,131 @@ Client::Client():
 		stampIDs.push_back(data);
 	}
 	stampsLib.close();
+
+	//Begin version check
+	versionCheckRequest = http_async_req_start(NULL, SERVER "/Download/Version.json", NULL, 0, 1);
 }
 
-Client::~Client()
+void Client::Tick()
+{
+	//Check status on version check request
+	if(versionCheckRequest && http_async_req_status(versionCheckRequest))
+	{
+		int status;
+		int dataLength;
+		char * data = http_async_req_stop(versionCheckRequest, &status, &dataLength);
+		versionCheckRequest = NULL;
+
+		if(status != 200)
+		{
+			if(data)
+				free(data);
+		}
+		else
+		{
+			std::istringstream dataStream(data);
+
+			try
+			{
+				json::Object objDocument;
+				json::Reader::Read(objDocument, dataStream);
+
+				json::Object stableVersion = objDocument["Stable"];
+				json::Object betaVersion = objDocument["Beta"];
+				json::Object snapshotVersion = objDocument["Snapshot"];
+
+				json::Number stableMajor = stableVersion["Major"];
+				json::Number stableMinor = stableVersion["Minor"];
+				json::Number stableBuild = stableVersion["Build"];
+				json::String stableFile = stableVersion["File"];
+
+				json::Number betaMajor = betaVersion["Major"];
+				json::Number betaMinor = betaVersion["Minor"];
+				json::Number betaBuild = betaVersion["Build"];
+				json::String betaFile = betaVersion["File"];
+
+				json::Number snapshotMajor = snapshotVersion["Major"];
+				json::Number snapshotMinor = snapshotVersion["Minor"];
+				json::Number snapshotBuild = snapshotVersion["Build"];
+				json::String snapshotFile = snapshotVersion["File"];
+
+				if(stableMajor.Value()>SAVE_VERSION || (stableMinor.Value()>MINOR_VERSION && stableMajor.Value()==SAVE_VERSION) || stableBuild.Value()>BUILD_NUM)
+				{
+					updateAvailable = true;
+					updateInfo = UpdateInfo(stableMajor.Value(), stableMinor.Value(), stableBuild.Value(), stableFile.Value(), UpdateInfo::Stable);
+				}
+
+#ifdef BETA
+				if(betaMajor.Value()>SAVE_VERSION || (betaMinor.Value()>MINOR_VERSION && betaMajor.Value()==SAVE_VERSION) || betaBuild.Value()>BUILD_NUM)
+				{
+					updateAvailable = true;
+					updateInfo = UpdateInfo(betaMajor.Value(), betaMinor.Value(), betaBuild.Value(), betaFile.Value(), UpdateInfo::Beta);
+				}
+#endif
+
+#ifdef SNAPSHOT
+				if(snapshotMajor.Value()>SAVE_VERSION || (snapshotMinor.Value()>MINOR_VERSION && snapshotMajor.Value()==SAVE_VERSION) || snapshotBuild.Value()>BUILD_NUM)
+				{
+					updateAvailable = true;
+					updateInfo = UpdateInfo(snapshotMajor.Value(), snapshotMinor.Value(), snapshotBuild.Value(), snapshotFile.Value(), UpdateInfo::Snapshot);
+				}
+#endif
+
+				if(updateAvailable)
+				{
+					notifyUpdateAvailable();
+				}
+			}
+			catch (json::Exception &e)
+			{
+				//Do nothing
+			}
+
+			if(data)
+				free(data);
+		}
+	}
+}
+
+UpdateInfo Client::GetUpdateInfo()
+{
+	return updateInfo;
+}
+
+void Client::notifyUpdateAvailable()
+{
+	for (std::vector<ClientListener*>::iterator iterator = listeners.begin(), end = listeners.end(); iterator != end; ++iterator)
+	{
+		(*iterator)->NotifyUpdateAvailable(this);
+	}
+}
+
+void Client::notifyAuthUserChanged()
+{
+	for (std::vector<ClientListener*>::iterator iterator = listeners.begin(), end = listeners.end(); iterator != end; ++iterator)
+	{
+		(*iterator)->NotifyAuthUserChanged(this);
+	}
+}
+
+void Client::AddListener(ClientListener * listener)
+{
+	listeners.push_back(listener);
+}
+
+void Client::RemoveListener(ClientListener * listener)
+{
+	for (std::vector<ClientListener*>::iterator iterator = listeners.begin(), end = listeners.end(); iterator != end; ++iterator)
+	{
+		if((*iterator) == listener)
+		{
+			listeners.erase(iterator);
+			return;
+		}
+	}
+}
+
+void Client::Shutdown()
 {
 	ClearThumbnailRequests();
 	http_done();
@@ -142,10 +268,15 @@ Client::~Client()
 	}
 }
 
+Client::~Client()
+{
+}
+
 
 void Client::SetAuthUser(User user)
 {
 	authUser = user;
+	notifyAuthUserChanged();
 }
 
 User Client::GetAuthUser()
@@ -253,12 +384,12 @@ SaveFile * Client::GetStamp(string stampID)
 
 void Client::DeleteStamp(string stampID)
 {
-	for(int i = 0; i < stampIDs.size(); i++)
+	for (std::list<string>::iterator iterator = stampIDs.begin(), end = stampIDs.end(); iterator != end; ++iterator)
 	{
-		if(stampIDs[i] == stampID)
+		if((*iterator) == stampID)
 		{
 			remove(string(STAMPS_DIR PATH_SEP + stampID + ".stm").c_str());
-			stampIDs.erase(stampIDs.begin()+i);
+			stampIDs.erase(iterator);
 			return;
 		}
 	}
@@ -294,7 +425,7 @@ string Client::AddStamp(GameSave * saveData)
 	stampStream.write((const char *)gameData, gameDataLength);
 	stampStream.close();
 
-	stampIDs.push_back(saveID.str());
+	stampIDs.push_front(saveID.str());
 
 	updateStamps();
 
@@ -312,18 +443,35 @@ void Client::updateStamps()
 
 	std::ofstream stampsStream;
 	stampsStream.open(string(STAMPS_DIR PATH_SEP "stamps.def").c_str(), ios::binary);
-	for(int i = 0; i < stampIDs.size(); i++)
+	for (std::list<string>::const_iterator iterator = stampIDs.begin(), end = stampIDs.end(); iterator != end; ++iterator)
 	{
-		stampsStream.write(stampIDs[i].c_str(), 10);
+		stampsStream.write((*iterator).c_str(), 10);
 	}
 	stampsStream.write("\0", 1);
 	stampsStream.close();
 	return;
 }
 
-vector<string> Client::GetStamps()
+int Client::GetStampsCount()
 {
-	return stampIDs;
+	return stampIDs.size();
+}
+
+vector<string> Client::GetStamps(int start, int count)
+{
+	if(start+count > stampIDs.size()) {
+		if(start > stampIDs.size())
+			return vector<string>();
+		count = stampIDs.size()-start;
+	}
+
+	vector<string> stampRange;
+	int index = 0;
+	for (std::list<string>::const_iterator iterator = stampIDs.begin(), end = stampIDs.end(); iterator != end; ++iterator, ++index) {
+		if(index>=start && index < start+count)
+			stampRange.push_back(*iterator);
+	}
+	return stampRange;
 }
 
 RequestStatus Client::ExecVote(int saveID, int direction)
@@ -513,6 +661,67 @@ RequestStatus Client::DeleteSave(int saveID)
 			json::Reader::Read(objDocument, dataStream);
 
 			int status = ((json::Number)objDocument["Status"]).Value();
+
+			if(status!=1)
+				goto failure;
+		}
+		catch (json::Exception &e)
+		{
+			lastError = "Could not read response";
+			goto failure;
+		}
+	}
+	else
+	{
+		lastError = http_ret_text(dataStatus);
+		goto failure;
+	}
+	if(data)
+		free(data);
+	return RequestOkay;
+failure:
+	if(data)
+		free(data);
+	return RequestFailure;
+}
+
+RequestStatus Client::AddComment(int saveID, std::string comment)
+{
+	lastError = "";
+	std::vector<string> * tags = NULL;
+	std::stringstream urlStream;
+	char * data = NULL;
+	int dataStatus, dataLength;
+	urlStream << "http://" << SERVER << "/Browse/Comments.json?ID=" << saveID << "&Key=" << authUser.SessionKey;
+	if(authUser.ID)
+	{
+		std::stringstream userIDStream;
+		userIDStream << authUser.ID;
+		
+		char * postNames[] = { "Comment", NULL };
+		char * postDatas[] = { (char*)(comment.c_str()) };
+		int postLengths[] = { comment.length() };
+		data = http_multipart_post((char *)urlStream.str().c_str(), postNames, postDatas, postLengths, (char *)(userIDStream.str().c_str()), NULL, (char *)(authUser.SessionID.c_str()), &dataStatus, &dataLength);
+	}
+	else
+	{
+		lastError = "Not authenticated";
+		return RequestFailure;
+	}
+	if(dataStatus == 200 && data)
+	{
+		try
+		{
+			std::istringstream dataStream(data);
+			json::Object objDocument;
+			json::Reader::Read(objDocument, dataStream);
+
+			int status = ((json::Number)objDocument["Status"]).Value();
+
+			if(status!=1)
+			{
+				lastError = ((json::Number)objDocument["Error"]).Value();
+			}
 
 			if(status!=1)
 				goto failure;
@@ -745,6 +954,7 @@ SaveInfo * Client::GetSave(int saveID, int saveDate)
 			json::Number tempDate = objDocument["Date"];
 			json::Boolean tempPublished = objDocument["Published"];
 			json::Boolean tempFavourite = objDocument["Favourite"];
+			json::Number tempComments = objDocument["Comments"];
 
 			json::Array tagsArray = objDocument["Tags"];
 			vector<string> tempTags;
@@ -767,6 +977,7 @@ SaveInfo * Client::GetSave(int saveID, int saveDate)
 					tempPublished.Value(),
 					tempTags
 					);
+			tempSave->Comments = tempComments.Value();
 			tempSave->Favourite = tempFavourite.Value();
 			return tempSave;
 		}
@@ -833,7 +1044,7 @@ std::vector<SaveComment*> * Client::GetComments(int saveID, int start, int count
 	std::stringstream urlStream;
 	char * data;
 	int dataStatus, dataLength;
-	urlStream << "http://" << SERVER << "/Browse/View.json?ID=" << saveID << "&Mode=Comments&Start=" << start << "&Count=" << count;
+	urlStream << "http://" << SERVER << "/Browse/Comments.json?ID=" << saveID << "&Start=" << start << "&Count=" << count;
 	data = http_simple_get((char *)urlStream.str().c_str(), &dataStatus, &dataLength);
 	if(dataStatus == 200 && data)
 	{
@@ -1175,4 +1386,209 @@ std::vector<string> * Client::AddTag(int saveID, string tag)
 	if(data)
 		free(data);
 	return tags;
+}
+
+vector<std::string> Client::explodePropertyString(std::string property)
+{
+	vector<string> stringArray;
+	string current = "";
+	for (string::iterator iter = property.begin(); iter != property.end(); ++iter) {
+		if (*iter == '.') {
+			if (current.length() > 0) {
+				stringArray.push_back(current);
+				current = "";
+			}
+		} else {
+			current += *iter;
+		}
+	}
+	if(current.length() > 0)
+		stringArray.push_back(current);
+	return stringArray;
+}
+
+std::string Client::GetPrefString(std::string property, std::string defaultValue)
+{
+	try
+	{
+		json::String value = GetPref(property);
+		return value.Value();
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return defaultValue;
+}
+
+double Client::GetPrefNumber(std::string property, double defaultValue)
+{
+	try
+	{
+		json::Number value = GetPref(property);
+		return value.Value();
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return defaultValue;
+}
+
+vector<string> Client::GetPrefStringArray(std::string property)
+{
+	try
+	{
+		json::Array value = GetPref(property);
+		vector<string> strArray;
+		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
+		{
+			json::String cValue = *iter;
+			strArray.push_back(cValue.Value());
+		}
+		return strArray;
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return vector<string>();
+}
+
+vector<double> Client::GetPrefNumberArray(std::string property)
+{
+	try
+	{
+		json::Array value = GetPref(property);
+		vector<double> strArray;
+		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
+		{
+			json::Number cValue = *iter;
+			strArray.push_back(cValue.Value());
+		}
+		return strArray;
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return vector<double>();
+}
+
+vector<bool> Client::GetPrefBoolArray(std::string property)
+{
+	try
+	{
+		json::Array value = GetPref(property);
+		vector<bool> strArray;
+		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
+		{
+			json::Boolean cValue = *iter;
+			strArray.push_back(cValue.Value());
+		}
+		return strArray;
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return vector<bool>();
+}
+
+bool Client::GetPrefBool(std::string property, bool defaultValue)
+{
+	try
+	{
+		json::Boolean value = GetPref(property);
+		return value.Value();
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return defaultValue;
+}
+
+void Client::SetPref(std::string property, std::string value)
+{
+	json::UnknownElement stringValue = json::String(value);
+	SetPref(property, stringValue);
+}
+
+void Client::SetPref(std::string property, double value)
+{
+	json::UnknownElement numberValue = json::Number(value);
+	SetPref(property, numberValue);
+}
+
+void Client::SetPref(std::string property, vector<string> value)
+{
+	json::Array newArray;
+	for(vector<string>::iterator iter = value.begin(); iter != value.end(); ++iter)
+	{
+		newArray.Insert(json::String(*iter));
+	}
+	json::UnknownElement newArrayValue = newArray;
+	SetPref(property, newArrayValue);
+}
+
+void Client::SetPref(std::string property, vector<double> value)
+{
+	json::Array newArray;
+	for(vector<double>::iterator iter = value.begin(); iter != value.end(); ++iter)
+	{
+		newArray.Insert(json::Number(*iter));
+	}
+	json::UnknownElement newArrayValue = newArray;
+	SetPref(property, newArrayValue);
+}
+
+void Client::SetPref(std::string property, vector<bool> value)
+{
+	json::Array newArray;
+	for(vector<bool>::iterator iter = value.begin(); iter != value.end(); ++iter)
+	{
+		newArray.Insert(json::Boolean(*iter));
+	}
+	json::UnknownElement newArrayValue = newArray;
+	SetPref(property, newArrayValue);
+}
+
+void Client::SetPref(std::string property, bool value)
+{
+	json::UnknownElement boolValue = json::Boolean(value);
+	SetPref(property, boolValue);
+}
+
+json::UnknownElement Client::GetPref(std::string property)
+{
+	vector<string> pTokens = Client::explodePropertyString(property);
+	const json::UnknownElement & configDocumentCopy = configDocument;
+	json::UnknownElement currentRef = configDocumentCopy;
+	for(vector<string>::iterator iter = pTokens.begin(); iter != pTokens.end(); ++iter)
+	{
+		currentRef = currentRef[*iter];
+	}
+	return currentRef;
+}
+
+void Client::setPrefR(std::deque<string> tokens, json::UnknownElement & element, json::UnknownElement & value)
+{
+	if(tokens.size())
+	{
+		std::string token = tokens.front();
+		tokens.pop_front();
+		setPrefR(tokens, element[token], value);
+	}
+	else
+		element = value;
+}
+
+void Client::SetPref(std::string property, json::UnknownElement & value)
+{
+	vector<string> pTokens = Client::explodePropertyString(property);
+	deque<string> dTokens(pTokens.begin(), pTokens.end());
+	string token = dTokens.front();
+	dTokens.pop_front();
+	setPrefR(dTokens, configDocument[token], value);
 }

@@ -43,13 +43,16 @@ Element_NBHL::Element_NBHL()
     HighTemperatureTransition = NT;
     
     Update = &Element_NBHL::update;
-    Graphics = NULL;
+    
 }
 
 //#TPT-Directive ElementHeader Element_NBHL static int update(UPDATE_FUNC_ARGS)
 int Element_NBHL::update(UPDATE_FUNC_ARGS)
  {
-	sim->gravmap[(y/CELL)*(XRES/CELL)+(x/CELL)] += 0.1f;
+	if (parts[i].tmp)
+		sim->gravmap[(y/CELL)*(XRES/CELL)+(x/CELL)] += restrict_flt(0.001f*parts[i].tmp, 0.1f, 51.2f);
+	else
+		sim->gravmap[(y/CELL)*(XRES/CELL)+(x/CELL)] += 0.1f;
 	return 0;
 }
 

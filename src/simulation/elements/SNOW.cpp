@@ -40,10 +40,10 @@ Element_SNOW::Element_SNOW()
     LowTemperature = ITL;
     LowTemperatureTransition = NT;
     HighTemperature = 273.0f;
-    HighTemperatureTransition = PT_WATR;
+    HighTemperatureTransition = ST;
     
     Update = &Element_SNOW::update;
-    Graphics = NULL;
+    
 }
 
 //#TPT-Directive ElementHeader Element_SNOW static int update(UPDATE_FUNC_ARGS)

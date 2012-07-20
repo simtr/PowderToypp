@@ -8,8 +8,8 @@
 #include "ToolButton.h"
 #include "interface/Keys.h"
 
-ToolButton::ToolButton(ui::Point position, ui::Point size, std::string text_):
-	ui::Button(position, size, text_)
+ToolButton::ToolButton(ui::Point position, ui::Point size, std::string text_, std::string toolTip):
+	ui::Button(position, size, text_, toolTip)
 {
 	SetSelectionState(-1);
 	Appearance.BorderActive = ui::Colour(255, 0, 0);
@@ -38,7 +38,7 @@ void ToolButton::OnMouseUp(int x, int y, unsigned int button)
 void ToolButton::Draw(const ui::Point& screenPos)
 {
 	Graphics * g = ui::Engine::Ref().g;
-	int totalColour = Appearance.BackgroundInactive.Red + (3*Appearance.BackgroundInactive.Green) + (2*Appearance.BackgroundInactive.Blue);
+	int totalColour = Appearance.BackgroundInactive.Blue + (3*Appearance.BackgroundInactive.Green) + (2*Appearance.BackgroundInactive.Red);
 
 	g->fillrect(screenPos.X+2, screenPos.Y+2, Size.X-4, Size.Y-4, Appearance.BackgroundInactive.Red, Appearance.BackgroundInactive.Green, Appearance.BackgroundInactive.Blue, Appearance.BackgroundInactive.Alpha);
 

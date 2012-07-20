@@ -50,6 +50,8 @@ Element_GEL::Element_GEL()
 int Element_GEL::update(UPDATE_FUNC_ARGS)
  {
 	int r, rx, ry;
+	if (parts[i].tmp>100) parts[i].tmp = 100;
+	if (parts[i].tmp<0) parts[i].tmp = 0;
 	for (rx=-2; rx<3; rx++)
 		for (ry=-2; ry<3; ry++)
 			if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
@@ -62,8 +64,14 @@ int Element_GEL::update(UPDATE_FUNC_ARGS)
 				if (((r&0xFF)==PT_WATR || (r&0xFF)==PT_DSTW || (r&0xFF)==PT_SLTW || (r&0xFF)==PT_CBNW)
 				    && parts[i].tmp<100)
 				{
-					parts[i].tmp = (100+parts[i].tmp)/2;
+					parts[i].tmp++;
 					sim->kill_part(r>>8);
+				}
+
+				if ((r&0xFF)==PT_SPNG && parts[i].tmp<100 && ((parts[r>>8].life+1)>parts[i].tmp))
+				{
+					parts[r>>8].life--;
+					parts[i].tmp++;
 				}
 
 				char gel = 0;
@@ -98,8 +106,13 @@ int Element_GEL::update(UPDATE_FUNC_ARGS)
 						per *= 0.1;
 
 					dx *= per; dy *= per;
-					parts[i].vx += dx; parts[r>>8].vx -= dx;
-					parts[i].vy += dy; parts[r>>8].vy -= dy;
+					parts[i].vx += dx;
+					parts[i].vy += dy;
+					if ((sim->elements[r&0xFF].Properties&TYPE_PART) || (r&0xFF)==PT_GOO)
+					{
+						parts[r>>8].vx -= dx;
+						parts[r>>8].vy -= dy;
+					}
 				}
 			}
 	return 0;

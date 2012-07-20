@@ -10,8 +10,8 @@
 #include <cstring>
 #include <cstddef>
 #include "Config.h"
-#include "Renderer.h"
-#include "Graphics.h"
+#include "graphics/Renderer.h"
+#include "graphics/Graphics.h"
 //#include "Elements.h"
 #include "Tools.h"
 #include "Misc.h"
@@ -71,6 +71,7 @@ public:
 	int NUM_PARTS;
 	int elementCount[PT_NUM];
 	int ISWIRE;
+	int force_stacking_check;
 	//Gol sim
 	int CGOL;
 	int ISGOL;
@@ -96,10 +97,10 @@ public:
 	Particle parts[NPART];
 	int pmap[YRES][XRES];
 	int photons[YRES][XRES];
+	int pmap_count[YRES][XRES];
 	//
 	int gravityMode;
 	//int airMode;
-	int ngrav_enable;
 	int legacy_enable;
 	int aheat_enable;
 	int VINE_MODE;
@@ -140,6 +141,7 @@ public:
 	//int get_brush_flags();
 	inline int create_part(int p, int x, int y, int t);
 	inline void delete_part(int x, int y, int flags);
+	void get_sign_pos(int i, int *x0, int *y0, int *w, int *h);
 	inline int is_wire(int x, int y);
 	inline int is_wire_off(int x, int y);
 	inline void set_emap(int x, int y);

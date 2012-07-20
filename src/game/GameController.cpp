@@ -10,7 +10,12 @@
 #include "login/LoginController.h"
 #include "interface/Point.h"
 #include "dialogues/ErrorMessage.h"
+#include "dialogues/ConfirmPrompt.h"
 #include "GameModelException.h"
+#include "simulation/Air.h"
+#include "elementsearch/ElementSearchActivity.h"
+#include "update/UpdateActivity.h"
+#include "Notification.h"
 
 using namespace std;
 
@@ -37,7 +42,7 @@ public:
 		{
 			try
 			{
-				cc->gameModel->SetSave(new SaveInfo(*(cc->search->GetLoadedSave())));
+				cc->gameModel->SetSave(cc->search->GetLoadedSave());
 			}
 			catch(GameModelException & ex)
 			{
@@ -107,9 +112,8 @@ public:
 		if(cc->localBrowser->GetSave())
 		{
 			cc->gameModel->SetStamp(cc->localBrowser->GetSave()->GetGameSave());
+			cc->LoadStamp();
 		}
-		else
-			cc->gameModel->SetStamp(NULL);
 	}
 };
 
@@ -120,7 +124,8 @@ GameController::GameController():
 		ssave(NULL),
 		console(NULL),
 		tagsWindow(NULL),
-		options(NULL)
+		options(NULL),
+		HasDone(false)
 {
 	gameView = new GameView();
 	gameModel = new GameModel();
@@ -132,6 +137,7 @@ GameController::GameController():
 	//commandInterface->AttachGameModel(gameModel);
 
 	//sim = new Simulation();
+	Client::Ref().AddListener(this);
 }
 
 GameController::~GameController()
@@ -161,6 +167,7 @@ GameController::~GameController()
 		ui::Engine::Ref().CloseWindow();
 	}
 	delete gameModel;
+	delete gameView;
 }
 
 GameView * GameController::GetView()
@@ -168,20 +175,11 @@ GameView * GameController::GetView()
 	return gameView;
 }
 
-void GameController::PlaceStamp(ui::Point position)
+void GameController::PlaceSave(ui::Point position)
 {
-	if(gameModel->GetStamp())
+	if(gameModel->GetPlaceSave())
 	{
-		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetStamp());
-		gameModel->SetPaused(gameModel->GetPaused());
-	}
-}
-
-void GameController::PlaceClipboard(ui::Point position)
-{
-	if(gameModel->GetClipboard())
-	{
-		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetClipboard());
+		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetPlaceSave());
 		gameModel->SetPaused(gameModel->GetPaused());
 	}
 }
@@ -232,6 +230,11 @@ ui::Point GameController::PointTranslate(ui::Point point)
 	if(point.X > zoomWindowPosition.X && point.X > zoomWindowPosition.Y && point.X < zoomWindowPosition.X+zoomWindowSize.X && point.Y < zoomWindowPosition.Y+zoomWindowSize.Y)
 		return ((point-zoomWindowPosition)/gameModel->GetZoomFactor())+gameModel->GetZoomPosition();
 	return point;
+}
+
+ui::Point GameController::NormaliseBlockCoord(ui::Point point)
+{
+	return (point/CELL)*CELL;
 }
 
 void GameController::DrawRect(int toolSelection, ui::Point point1, ui::Point point2)
@@ -304,6 +307,31 @@ void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueu
 	}
 }
 
+void GameController::LoadClipboard()
+{
+	gameModel->SetPlaceSave(gameModel->GetClipboard());
+}
+
+void GameController::LoadStamp()
+{
+	gameModel->SetPlaceSave(gameModel->GetStamp());
+}
+
+void GameController::TranslateSave(ui::Point point)
+{
+	matrix2d transform = m2d_identity;
+	vector2d translate = v2d_new(point.X, point.Y);
+	gameModel->GetPlaceSave()->Transform(transform, translate);
+	gameModel->SetPlaceSave(gameModel->GetPlaceSave());
+}
+
+void GameController::TransformSave(matrix2d transform)
+{
+	vector2d translate = v2d_zero;
+	gameModel->GetPlaceSave()->Transform(transform, translate);
+	gameModel->SetPlaceSave(gameModel->GetPlaceSave());
+}
+
 void GameController::ToolClick(int toolSelection, ui::Point point)
 {
 	Simulation * sim = gameModel->GetSimulation();
@@ -365,6 +393,22 @@ bool GameController::KeyRelease(int key, Uint16 character, bool shift, bool ctrl
 void GameController::Tick()
 {
 	commandInterface->OnTick();
+}
+
+void GameController::Exit()
+{
+	if(ui::Engine::Ref().GetWindow() == gameView)
+		ui::Engine::Ref().CloseWindow();
+	HasDone = true;
+}
+
+void GameController::LoadRenderPreset(RenderPreset preset)
+{
+	Renderer * renderer = gameModel->GetRenderer();
+	gameModel->SetInfoTip(preset.Name);
+	renderer->SetRenderMode(preset.RenderModes);
+	renderer->SetDisplayMode(preset.DisplayModes);
+	renderer->SetColourMode(preset.ColourMode);
 }
 
 void GameController::Update()
@@ -479,6 +523,21 @@ void GameController::OpenLogin()
 	ui::Engine::Ref().ShowWindow(loginWindow->GetView());
 }
 
+void GameController::OpenElementSearch()
+{
+	vector<Tool*> toolList;
+	vector<Menu*> menuList = gameModel->GetMenuList();
+	for(std::vector<Menu*>::iterator iter = menuList.begin(), end = menuList.end(); iter!=end; ++iter) {
+		if(!(*iter))
+			continue;
+		vector<Tool*> menuToolList = (*iter)->GetToolList();
+		if(!menuToolList.size())
+			continue;
+		toolList.insert(toolList.end(), menuToolList.begin(), menuToolList.end());
+	}
+	ui::Engine::Ref().ShowWindow(new ElementSearchActivity(gameModel, toolList));
+}
+
 void GameController::OpenTags()
 {
 	if(gameModel->GetUser().ID)
@@ -529,7 +588,14 @@ void GameController::OpenSaveWindow()
 {
 	if(gameModel->GetUser().ID)
 	{
-		GameSave * gameSave = gameModel->GetSimulation()->Save();
+		Simulation * sim = gameModel->GetSimulation();
+		GameSave * gameSave = sim->Save();
+		gameSave->paused = gameModel->GetPaused();
+		gameSave->gravityMode = sim->gravityMode;
+		gameSave->airMode = sim->air->airMode;
+		gameSave->legacyEnable = sim->legacy_enable;
+		gameSave->waterEEnabled = sim->water_equal_test;
+		gameSave->gravityEnable = sim->grav->ngrav_enable;
 		if(!gameSave)
 		{
 			new ErrorMessage("Error", "Unable to build save.");
@@ -584,7 +650,7 @@ void GameController::ReloadSim()
 {
 	if(gameModel->GetSave() && gameModel->GetSave()->GetGameSave())
 	{
-		gameModel->GetSimulation()->Load(gameModel->GetSave()->GetGameSave());
+		gameModel->SetSave(gameModel->GetSave());
 	}
 }
 
@@ -594,5 +660,58 @@ std::string GameController::ElementResolve(int type)
 		return std::string(gameModel->GetSimulation()->elements[type].Name);
 	else
 		return "";
+}
+
+void GameController::NotifyUpdateAvailable(Client * sender)
+{
+	class UpdateConfirmation: public ConfirmDialogueCallback {
+	public:
+		GameController * c;
+		UpdateConfirmation(GameController * c_) {	c = c_;	}
+		virtual void ConfirmCallback(ConfirmPrompt::DialogueResult result) {
+			if (result == ConfirmPrompt::ResultOkay)
+			{
+				c->RunUpdater();
+			}
+		}
+		virtual ~UpdateConfirmation() { }
+	};
+
+	class UpdateNotification : public Notification
+	{
+		GameController * c;
+	public:
+		UpdateNotification(GameController * c, std::string message) : c(c), Notification(message) {}
+		virtual ~UpdateNotification() {}
+
+		virtual void Action()
+		{
+			new ConfirmPrompt("Run Updater", "Are you sure you want to run the updater, please save any changes before updating", new UpdateConfirmation(c));
+		}
+	};
+
+	switch(sender->GetUpdateInfo().Type)
+	{
+		case UpdateInfo::Snapshot:
+			gameModel->AddNotification(new UpdateNotification(this, std::string("A new snapshot is available - click here to update")));
+			break;
+		case UpdateInfo::Stable:
+			gameModel->AddNotification(new UpdateNotification(this, std::string("A new version is available - click here to update")));
+			break;
+		case UpdateInfo::Beta:
+			gameModel->AddNotification(new UpdateNotification(this, std::string("A new beta is available - click here to update")));
+			break;
+	}
+}
+
+void GameController::RemoveNotification(Notification * notification)
+{
+	gameModel->RemoveNotification(notification);
+}
+
+void GameController::RunUpdater()
+{
+	Exit();
+	new UpdateActivity();
 }
 

@@ -6,7 +6,7 @@
 #include "interface/Window.h"
 #include "interface/Platform.h"
 #include "interface/Engine.h"
-#include "Graphics.h"
+#include "graphics/Graphics.h"
 
 using namespace ui;
 using namespace std;
@@ -21,7 +21,8 @@ Engine::Engine():
 	windows(stack<Window*>()),
 	lastBuffer(NULL),
 	prevBuffers(stack<pixel*>()),
-	windowTargetPosition(0, 0)
+	windowTargetPosition(0, 0),
+	FrameIndex(0)
 {
 }
 
@@ -75,7 +76,7 @@ void Engine::ShowWindow(Window * window)
 		}
 		lastBuffer = (pixel*)malloc((width_ * height_) * PIXELSIZE);
 
-#ifndef OGLR
+#ifndef OGLI
 		memcpy(lastBuffer, g->vid, (width_ * height_) * PIXELSIZE);
 #endif
 
@@ -170,7 +171,7 @@ void Engine::Draw()
 	if(lastBuffer && !(state_->Position.X == 0 && state_->Position.Y == 0 && state_->Size.X == width_ && state_->Size.Y == height_))
 	{
 		g->Clear();
-#ifndef OGLR
+#ifndef OGLI
 		memcpy(g->vid, lastBuffer, (width_ * height_) * PIXELSIZE);
 #endif
 	}
@@ -185,6 +186,8 @@ void Engine::Draw()
 	sprintf(fpsText, "FPS: %.2f, Delta: %.3f", fps, dt);
 	ui::Engine::Ref().g->drawtext(10, 10, fpsText, 255, 255, 255, 255);
 	g->Finalise();
+	FrameIndex++;
+	FrameIndex %= 7200;
 }
 
 void Engine::SetFps(float fps)

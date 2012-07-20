@@ -5,21 +5,24 @@
  *      Author: Simon
  */
 
+#include <cmath>
 #include "PreviewModel.h"
 #include "client/Client.h"
 #include "PreviewModelException.h"
 
 PreviewModel::PreviewModel():
 	save(NULL),
-	savePreview(NULL),
 	saveComments(NULL),
 	doOpen(false),
-	updateSavePreviewWorking(false),
-	updateSavePreviewFinished(false),
+	updateSaveDataWorking(false),
+	updateSaveDataFinished(false),
 	updateSaveInfoWorking(false),
 	updateSaveInfoFinished(false),
 	updateSaveCommentsWorking(false),
-	updateSaveCommentsFinished(false)
+	updateSaveCommentsFinished(false),
+	commentsTotal(0),
+	commentsPageNumber(1),
+	commentBoxEnabled(false)
 {
 	// TODO Auto-generated constructor stub
 
@@ -30,9 +33,9 @@ void * PreviewModel::updateSaveInfoTHelper(void * obj)
 	return ((PreviewModel*)obj)->updateSaveInfoT();
 }
 
-void * PreviewModel::updateSavePreviewTHelper(void * obj)
+void * PreviewModel::updateSaveDataTHelper(void * obj)
 {
-	return ((PreviewModel*)obj)->updateSavePreviewT();
+	return ((PreviewModel*)obj)->updateSaveDataT();
 }
 
 void * PreviewModel::updateSaveCommentsTHelper(void * obj)
@@ -47,16 +50,20 @@ void * PreviewModel::updateSaveInfoT()
 	return tempSave;
 }
 
-void * PreviewModel::updateSavePreviewT()
+void * PreviewModel::updateSaveDataT()
 {
-	Thumbnail * tempThumb = Client::Ref().GetPreview(tSaveID, tSaveDate);
-	updateSavePreviewFinished = true;
-	return tempThumb;
+	int tempDataSize;
+	unsigned char * tempData = Client::Ref().GetSaveData(tSaveID, tSaveDate, tempDataSize);
+	saveDataBuffer.clear();
+	saveDataBuffer.insert(saveDataBuffer.begin(), tempData, tempData+tempDataSize);
+	updateSaveDataFinished = true;
+	return NULL;
 }
 
 void * PreviewModel::updateSaveCommentsT()
 {
-	std::vector<SaveComment*> * tempComments = Client::Ref().GetComments(tSaveID, 0, 10);
+	//Haha, j/k
+	std::vector<SaveComment*> * tempComments = Client::Ref().GetComments(tSaveID, (commentsPageNumber-1)*20, 20);
 	updateSaveCommentsFinished = true;
 	return tempComments;
 }
@@ -71,6 +78,20 @@ void PreviewModel::SetFavourite(bool favourite)
 	}
 }
 
+bool PreviewModel::GetCommentBoxEnabled()
+{
+	return commentBoxEnabled;
+}
+
+void PreviewModel::SetCommentBoxEnabled(bool enabledState)
+{
+	if(enabledState != commentBoxEnabled)
+	{
+		commentBoxEnabled = enabledState;
+		notifyCommentBoxEnabledChanged();
+	}
+}
+
 void PreviewModel::UpdateSave(int saveID, int saveDate)
 {
 	this->tSaveID = saveID;
@@ -81,11 +102,7 @@ void PreviewModel::UpdateSave(int saveID, int saveDate)
 		delete save;
 		save = NULL;
 	}
-	if(savePreview)
-	{
-		delete savePreview;
-		savePreview = NULL;
-	}
+	saveDataBuffer.clear();
 	if(saveComments)
 	{
 		for(int i = 0; i < saveComments->size(); i++)
@@ -93,15 +110,14 @@ void PreviewModel::UpdateSave(int saveID, int saveDate)
 		delete saveComments;
 		saveComments = NULL;
 	}
-	notifyPreviewChanged();
 	notifySaveChanged();
 	notifySaveCommentsChanged();
 
-	if(!updateSavePreviewWorking)
+	if(!updateSaveDataWorking)
 	{
-		updateSavePreviewWorking = true;
-		updateSavePreviewFinished = false;
-		pthread_create(&updateSavePreviewThread, 0, &PreviewModel::updateSavePreviewTHelper, this);
+		updateSaveDataWorking = true;
+		updateSaveDataFinished = false;
+		pthread_create(&updateSaveDataThread, 0, &PreviewModel::updateSaveDataTHelper, this);
 	}
 
 	if(!updateSaveInfoWorking)
@@ -113,6 +129,7 @@ void PreviewModel::UpdateSave(int saveID, int saveDate)
 
 	if(!updateSaveCommentsWorking)
 	{
+		commentsLoaded = false;
 		updateSaveCommentsWorking = true;
 		updateSaveCommentsFinished = false;
 		pthread_create(&updateSaveCommentsThread, 0, &PreviewModel::updateSaveCommentsTHelper, this);
@@ -129,14 +146,49 @@ bool PreviewModel::GetDoOpen()
 	return doOpen;
 }
 
-Thumbnail * PreviewModel::GetPreview()
-{
-	return savePreview;
-}
-
 SaveInfo * PreviewModel::GetSave()
 {
 	return save;
+}
+
+int PreviewModel::GetCommentsPageNum()
+{
+	return commentsPageNumber;
+}
+
+int PreviewModel::GetCommentsPageCount()
+{
+	return max(1, (int)(ceil(commentsTotal/20)));
+}
+
+bool PreviewModel::GetCommentsLoaded()
+{
+	return commentsLoaded;
+}
+
+void PreviewModel::UpdateComments(int pageNumber)
+{
+	commentsLoaded = false;
+	if(saveComments)
+	{
+		for(int i = 0; i < saveComments->size(); i++)
+			delete saveComments->at(i);
+		delete saveComments;
+		saveComments = NULL;
+	}
+
+	//resultCount = 0;
+	commentsPageNumber = pageNumber;
+	notifySaveCommentsChanged();
+	notifyCommentsPageChanged();
+
+	//Threading
+	if(!updateSaveCommentsWorking)
+	{
+		updateSaveCommentsFinished = false;
+		updateSaveCommentsWorking = true;
+		pthread_create(&updateSaveCommentsThread, 0, &PreviewModel::updateSaveCommentsTHelper, this);
+	}
 }
 
 std::vector<SaveComment*> * PreviewModel::GetComments()
@@ -144,19 +196,27 @@ std::vector<SaveComment*> * PreviewModel::GetComments()
 	return saveComments;
 }
 
-void PreviewModel::notifyPreviewChanged()
-{
-	for(int i = 0; i < observers.size(); i++)
-	{
-		observers[i]->NotifyPreviewChanged(this);
-	}
-}
-
 void PreviewModel::notifySaveChanged()
 {
 	for(int i = 0; i < observers.size(); i++)
 	{
 		observers[i]->NotifySaveChanged(this);
+	}
+}
+
+void PreviewModel::notifyCommentBoxEnabledChanged()
+{
+	for(int i = 0; i < observers.size(); i++)
+	{
+		observers[i]->NotifyCommentBoxEnabledChanged(this);
+	}
+}
+
+void PreviewModel::notifyCommentsPageChanged()
+{
+	for(int i = 0; i < observers.size(); i++)
+	{
+		observers[i]->NotifyCommentsPageChanged(this);
 	}
 }
 
@@ -170,24 +230,33 @@ void PreviewModel::notifySaveCommentsChanged()
 
 void PreviewModel::AddObserver(PreviewView * observer) {
 	observers.push_back(observer);
-	observer->NotifyPreviewChanged(this);
 	observer->NotifySaveChanged(this);
+	observer->NotifyCommentsChanged(this);
+	observer->NotifyCommentsPageChanged(this);
+	observer->NotifyCommentBoxEnabledChanged(this);
 }
 
 void PreviewModel::Update()
 {
-	if(updateSavePreviewWorking)
+	if(updateSaveDataWorking)
 	{
-		if(updateSavePreviewFinished)
+		if(updateSaveDataFinished)
 		{
-			if(savePreview)
+			updateSaveDataWorking = false;
+			pthread_join(updateSaveDataThread, NULL);
+
+			if(updateSaveInfoFinished && save)
 			{
-				delete savePreview;
-				savePreview = NULL;
+				try
+				{
+					save->SetGameSave(new GameSave(&saveDataBuffer[0], saveDataBuffer.size()));
+				}
+				catch(ParseException &e)
+				{
+					throw PreviewModelException("Save file corrupt or from newer version");
+				}
+				notifySaveChanged();
 			}
-			updateSavePreviewWorking = false;
-			pthread_join(updateSavePreviewThread, (void**)(&savePreview));
-			notifyPreviewChanged();
 		}
 	}
 
@@ -202,7 +271,20 @@ void PreviewModel::Update()
 			}
 			updateSaveInfoWorking = false;
 			pthread_join(updateSaveInfoThread, (void**)(&save));
+			if(updateSaveDataFinished && save)
+			{
+				commentsTotal = save->Comments;
+				try
+				{
+					save->SetGameSave(new GameSave(&saveDataBuffer[0], saveDataBuffer.size()));
+				}
+				catch(ParseException &e)
+				{
+					throw PreviewModelException("Save file corrupt or from newer version");
+				}
+			}
 			notifySaveChanged();
+			notifyCommentsPageChanged();
 			if(!save)
 				throw PreviewModelException("Unable to load save");
 		}
@@ -219,6 +301,7 @@ void PreviewModel::Update()
 				delete saveComments;
 				saveComments = NULL;
 			}
+			commentsLoaded = true;
 			updateSaveCommentsWorking = false;
 			pthread_join(updateSaveCommentsThread, (void**)(&saveComments));
 			notifySaveCommentsChanged();
@@ -229,7 +312,5 @@ void PreviewModel::Update()
 PreviewModel::~PreviewModel() {
 	if(save)
 		delete save;
-	if(savePreview)
-		delete savePreview;
 }
 

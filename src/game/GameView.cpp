@@ -2,8 +2,9 @@
 #include <iomanip>
 
 #include "Config.h"
+#include "Style.h"
 #include "GameView.h"
-#include "Graphics.h"
+#include "graphics/Graphics.h"
 #include "interface/Window.h"
 #include "interface/Button.h"
 #include "interface/Colour.h"
@@ -29,10 +30,16 @@ GameView::GameView():
 	selectMode(SelectNone),
 	selectPoint1(0, 0),
 	selectPoint2(0, 0),
-	stampThumb(NULL),
-	clipboardThumb(NULL),
-	mousePosition(0, 0)
+	placeSaveThumb(NULL),
+	mousePosition(0, 0),
+	lastOffset(0),
+	drawSnap(false),
+	toolTip(""),
+	infoTip(""),
+	infoTipPresence(0),
+	toolTipPosition(-1, -1)
 {
+	
 	int currentX = 1;
 	//Set up UI
 	class SearchAction : public ui::ButtonAction
@@ -45,6 +52,13 @@ GameView::GameView():
 			v->c->OpenSearch();
 		}
 	};
+	
+	scrollBar = new ui::Button(ui::Point(0,YRES+21), ui::Point(XRES, 2), "");
+	scrollBar->Appearance.BackgroundInactive = ui::Colour(255, 255, 255);
+	scrollBar->Appearance.HorizontalAlign = ui::Appearance::AlignCentre;
+	scrollBar->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
+	AddComponent(scrollBar);
+	
 	searchButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(17, 15));  //Open
 	searchButton->SetIcon(IconOpen);
 	currentX+=18;
@@ -230,6 +244,74 @@ GameView::GameView():
 	colourBSlider->SetActionCallback(colC);
 	colourASlider = new ui::Slider(ui::Point(275, Size.Y-39), ui::Point(50, 14), 255);
 	colourASlider->SetActionCallback(colC);
+
+	class ElementSearchAction : public ui::ButtonAction
+	{
+		GameView * v;
+	public:
+		ElementSearchAction(GameView * _v) { v = _v; }
+		void ActionCallback(ui::Button * sender)
+		{
+			v->c->OpenElementSearch();
+		}
+	};
+	ui::Button * tempButton = new ui::Button(ui::Point(XRES+BARSIZE-16, YRES+MENUSIZE-32), ui::Point(15, 15), "");
+	tempButton->Appearance.Margin = ui::Border(0, 2, 3, 2);
+	tempButton->SetActionCallback(new ElementSearchAction(this));
+	AddComponent(tempButton);
+
+	//Render mode presets. Possibly load from config in future?
+	renderModePresets = new RenderPreset[10];
+
+	renderModePresets[0].Name = "Alternative Velocity Display";
+	renderModePresets[0].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[0].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[0].DisplayModes.push_back(DISPLAY_AIRC);
+
+	renderModePresets[1].Name = "Velocity Display";
+	renderModePresets[1].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[1].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[1].DisplayModes.push_back(DISPLAY_AIRV);
+
+	renderModePresets[2].Name = "Pressure Display";
+	renderModePresets[2].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[2].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[2].DisplayModes.push_back(DISPLAY_AIRP);
+
+	renderModePresets[3].Name = "Persistent Display";
+	renderModePresets[3].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[3].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[3].DisplayModes.push_back(DISPLAY_PERS);
+
+	renderModePresets[4].Name = "Fire Display";
+	renderModePresets[4].RenderModes.push_back(RENDER_FIRE);
+	renderModePresets[4].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[4].RenderModes.push_back(RENDER_BASC);
+
+	renderModePresets[5].Name = "Blob Display";
+	renderModePresets[5].RenderModes.push_back(RENDER_FIRE);
+	renderModePresets[5].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[5].RenderModes.push_back(RENDER_BLOB);
+
+	renderModePresets[6].Name = "Heat Display";
+	renderModePresets[6].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[6].DisplayModes.push_back(DISPLAY_AIRH);
+	renderModePresets[6].ColourMode = COLOUR_HEAT;
+
+	renderModePresets[7].Name = "Fancy Display";
+	renderModePresets[7].RenderModes.push_back(RENDER_FIRE);
+	renderModePresets[7].RenderModes.push_back(RENDER_GLOW);
+	renderModePresets[7].RenderModes.push_back(RENDER_BLUR);
+	renderModePresets[7].RenderModes.push_back(RENDER_EFFE);
+	renderModePresets[7].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[7].DisplayModes.push_back(DISPLAY_WARP);
+
+	renderModePresets[8].Name = "Nothing Display";
+	renderModePresets[8].RenderModes.push_back(RENDER_BASC);
+
+	renderModePresets[9].Name = "Heat Gradient Display";
+	renderModePresets[9].RenderModes.push_back(RENDER_BASC);
+	renderModePresets[9].ColourMode = COLOUR_GRAD;
 }
 
 class GameView::MenuAction: public ui::ButtonAction
@@ -264,7 +346,7 @@ public:
 
 void GameView::NotifyMenuListChanged(GameModel * sender)
 {
-	int currentY = YRES+MENUSIZE-16-(sender->GetMenuList().size()*16);
+	int currentY = YRES+MENUSIZE-48;//-(sender->GetMenuList().size()*16);
 	for(int i = 0; i < menuButtons.size(); i++)
 	{
 		RemoveComponent(menuButtons[i]);
@@ -278,15 +360,16 @@ void GameView::NotifyMenuListChanged(GameModel * sender)
 	}
 	toolButtons.clear();
 	vector<Menu*> menuList = sender->GetMenuList();
-	for(int i = 0; i < menuList.size(); i++)
+	for(vector<Menu*>::reverse_iterator iter = menuList.rbegin(), end = menuList.rend(); iter != end; ++iter)
 	{
 		std::string tempString = "";
-		tempString += menuList[i]->GetIcon();
-		ui::Button * tempButton = new ui::Button(ui::Point(XRES+BARSIZE-16, currentY), ui::Point(15, 15), tempString);
+		Menu * item = *iter;
+		tempString += item->GetIcon();
+		ui::Button * tempButton = new ui::Button(ui::Point(XRES+BARSIZE-16, currentY), ui::Point(15, 15), tempString, item->GetDescription());
 		tempButton->Appearance.Margin = ui::Border(0, 2, 3, 2);
 		tempButton->SetTogglable(true);
-		tempButton->SetActionCallback(new MenuAction(this, menuList[i]));
-		currentY+=16;
+		tempButton->SetActionCallback(new MenuAction(this, item));
+		currentY-=16;
 		AddComponent(tempButton);
 		menuButtons.push_back(tempButton);
 	}
@@ -329,6 +412,7 @@ void GameView::NotifyActiveToolsChanged(GameModel * sender)
 void GameView::NotifyToolListChanged(GameModel * sender)
 {
 	//int currentY = YRES+MENUSIZE-36;
+	lastOffset = 0;
 	int currentX = XRES+BARSIZE-56;
 	int totalColour;
 	for(int i = 0; i < menuButtons.size(); i++)
@@ -352,7 +436,7 @@ void GameView::NotifyToolListChanged(GameModel * sender)
 	for(int i = 0; i < toolList.size(); i++)
 	{
 		//ToolButton * tempButton = new ToolButton(ui::Point(XRES+1, currentY), ui::Point(28, 15), toolList[i]->GetName());
-		ToolButton * tempButton = new ToolButton(ui::Point(currentX, YRES+1), ui::Point(30, 18), toolList[i]->GetName());
+		ToolButton * tempButton = new ToolButton(ui::Point(currentX, YRES+1), ui::Point(30, 18), toolList[i]->GetName(), toolList[i]->GetDescription());
 		//currentY -= 17;
 		currentX -= 31;
 		tempButton->SetActionCallback(new ToolAction(this, toolList[i]));
@@ -440,6 +524,17 @@ void GameView::NotifyPausedChanged(GameModel * sender)
 	pauseButton->SetToggleState(sender->GetPaused());
 }
 
+void GameView::NotifyToolTipChanged(GameModel * sender)
+{
+	toolTip = sender->GetToolTip();
+}
+
+void GameView::NotifyInfoTipChanged(GameModel * sender)
+{
+	infoTip = sender->GetInfoTip();
+	infoTipPresence = 120;
+}
+
 void GameView::NotifySaveChanged(GameModel * sender)
 {
 	if(sender->GetSave())
@@ -488,12 +583,30 @@ void GameView::NotifyBrushChanged(GameModel * sender)
 	activeBrush = sender->GetBrush();
 }
 
+void GameView::setToolButtonOffset(int offset)
+{
+	int offset_ = offset;
+	offset = offset-lastOffset;
+	lastOffset = offset_;
+
+	for(vector<ToolButton*>::iterator iter = toolButtons.begin(), end = toolButtons.end(); iter!=end; ++iter)
+	{
+		ToolButton * button = *iter;
+		button->Position.X -= offset;
+		if(button->Position.X <= 0 || (button->Position.X+button->Size.X) > XRES-2) {
+			button->Visible = false;
+		} else {
+			button->Visible = true;
+		}
+	}
+}
+
 void GameView::OnMouseMove(int x, int y, int dx, int dy)
 {
 	mousePosition = c->PointTranslate(ui::Point(x, y));
 	if(selectMode!=SelectNone)
 	{
-		if(selectMode==PlaceStamp || selectMode==PlaceClipboard)
+		if(selectMode==PlaceSave)
 			selectPoint1 = ui::Point(x, y);
 		if(selectPoint1.X!=-1)
 			selectPoint2 = ui::Point(x, y);
@@ -544,9 +657,9 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 	{
 		if(button==BUTTON_LEFT)
 		{
-			if(selectMode==PlaceStamp || selectMode==PlaceClipboard)
+			if(selectMode==PlaceSave)
 			{
-				Thumbnail * tempThumb = selectMode==PlaceStamp?stampThumb:clipboardThumb;
+				Thumbnail * tempThumb = placeSaveThumb;
 				if(tempThumb)
 				{
 					int thumbX = selectPoint2.X - (tempThumb->Size.X/2);
@@ -562,10 +675,7 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 					if(thumbY+(tempThumb->Size.Y)>=YRES)
 						thumbY = YRES-tempThumb->Size.Y;
 
-					if(selectMode==PlaceStamp)
-						c->PlaceStamp(ui::Point(thumbX, thumbY));
-					if(selectMode==PlaceClipboard)
-						c->PlaceClipboard(ui::Point(thumbX, thumbY));
+					c->PlaceSave(ui::Point(thumbX, thumbY));
 				}
 			}
 			else
@@ -596,14 +706,27 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 			isMouseDown = false;
 			if(drawMode == DrawRect || drawMode == DrawLine)
 			{
+				ui::Point finalDrawPoint2(0, 0);
 				drawPoint2 = ui::Point(x, y);
+				finalDrawPoint2 = drawPoint2;
+
+				if(drawSnap && drawMode == DrawLine)
+				{
+					finalDrawPoint2 = lineSnapCoords(drawPoint1, drawPoint2);
+				}
+
+				if(drawSnap && drawMode == DrawRect)
+				{
+					finalDrawPoint2 = rectSnapCoords(drawPoint1, drawPoint2);
+				}
+
 				if(drawMode == DrawRect)
 				{
-					c->DrawRect(toolIndex, drawPoint1, drawPoint2);
+					c->DrawRect(toolIndex, drawPoint1, finalDrawPoint2);
 				}
 				if(drawMode == DrawLine)
 				{
-					c->DrawLine(toolIndex, drawPoint1, drawPoint2);
+					c->DrawLine(toolIndex, drawPoint1, finalDrawPoint2);
 				}
 			}
 			if(drawMode == DrawPoints)
@@ -618,6 +741,12 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 			}
 		}
 	}
+}
+
+void GameView::ToolTip(ui::Component * sender, ui::Point mousePosition, std::string toolTip)
+{
+	this->toolTip = toolTip;
+	toolTipPosition = ui::Point(Size.X-27-Graphics::textwidth((char*)toolTip.c_str()), Size.Y-MENUSIZE-10);
 }
 
 void GameView::OnMouseWheel(int x, int y, int d)
@@ -646,10 +775,47 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 {
 	if(selectMode!=SelectNone)
 	{
+		if(selectMode==PlaceSave)
+		{
+			switch(key)
+			{
+			case KEY_RIGHT:
+			case 'd':
+				c->TranslateSave(ui::Point(1, 0));
+				break;
+			case KEY_LEFT:
+			case 'a':
+				c->TranslateSave(ui::Point(-1, 0));
+				break;
+			case KEY_UP:
+			case 'w':
+				c->TranslateSave(ui::Point(0, -1));
+				break;
+			case KEY_DOWN:
+			case 's':
+				c->TranslateSave(ui::Point(0, 1));
+				break;
+			case 'r':
+				if(shift)
+				{
+					//Flip
+					c->TransformSave(m2d_new(-1,0,0,1));
+				}
+				else
+				{
+					//Rotate 90deg
+					c->TransformSave(m2d_new(0,1,-1,0));
+				}
+				break;
+			}
+		}
 		return;
 	}
 	switch(key)
 	{
+	case KEY_ALT:
+		drawSnap = true;
+		break;
 	case KEY_CTRL:
 		if(drawModeReset)
 			drawModeReset = false;
@@ -684,6 +850,9 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	case '`':
 		c->ShowConsole();
 		break;
+	case 'e':
+		c->OpenElementSearch();
+		break;
 	case 'f':
 		c->FrameStep();
 		break;
@@ -703,15 +872,19 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 		}
 		break;
 	case 'v':
-		if(ctrl && clipboardThumb)
+		if(ctrl)
 		{
-			selectMode = PlaceClipboard;
+			c->LoadClipboard();
 			selectPoint2 = ui::Point(-1, -1);
 			selectPoint1 = selectPoint2;
 		}
 		break;
 	case 'l':
-		selectMode = PlaceStamp;
+		c->LoadStamp();
+		selectPoint2 = ui::Point(-1, -1);
+		selectPoint1 = selectPoint2;
+		break;
+	case 'k':
 		selectPoint2 = ui::Point(-1, -1);
 		selectPoint1 = selectPoint2;
 		c->OpenStamps();
@@ -722,6 +895,11 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	case '[':
 		c->AdjustBrushSize(-1, true);
 		break;
+	}
+
+	if(key >= '0' && key <= '9')
+	{
+		c->LoadRenderPreset(renderModePresets[key-'0']);
 	}
 }
 
@@ -737,6 +915,9 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 		drawModeReset = true;
 	switch(key)
 	{
+	case KEY_ALT:
+		drawSnap = false;
+		break;
 	case 'z':
 		if(!zoomCursorFixed)
 			c->SetZoomEnabled(false);
@@ -746,9 +927,7 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 
 void GameView::OnTick(float dt)
 {
-	if(selectMode==PlaceStamp && !stampThumb)
-			selectMode = SelectNone;
-	if(selectMode==PlaceClipboard&& !clipboardThumb)
+	if(selectMode==PlaceSave && !placeSaveThumb)
 			selectMode = SelectNone;
 	if(zoomEnabled && !zoomCursorFixed)
 		c->SetZoomPosition(currentMouse);
@@ -767,15 +946,59 @@ void GameView::OnTick(float dt)
 	{
 		c->DrawFill(toolIndex, currentMouse);
 	}
+	if(infoTipPresence>0)
+	{
+		infoTipPresence -= int(dt)>0?int(dt):1;
+		if(infoTipPresence<0)
+			infoTipPresence = 0;
+	}
 	c->Update();
 	if(lastLogEntry > -0.1f)
 		lastLogEntry -= 0.16*dt;
 }
 
+
 void GameView::DoMouseMove(int x, int y, int dx, int dy)
 {
 	if(c->MouseMove(x, y, dx, dy))
 		Window::DoMouseMove(x, y, dx, dy);
+
+	if(toolButtons.size())
+	{
+		int totalWidth = (toolButtons[0]->Size.X+1)*toolButtons.size();
+		int scrollSize = (int)(((float)(XRES-15))/((float)totalWidth) * ((float)XRES-15));
+		if (scrollSize>XRES)
+			scrollSize = XRES;
+		if(totalWidth > XRES-15)
+		{
+			int mouseX = x;
+			if(mouseX > XRES)
+				mouseX = XRES;
+				
+			scrollBar->Position.X = (int)(((float)mouseX/((float)XRES-15))*(float)(XRES-scrollSize));
+					
+			float overflow = totalWidth-(XRES-15), mouseLocation = float(XRES)/float(mouseX-(XRES));
+			setToolButtonOffset(overflow/mouseLocation);
+			
+			//Ensure that mouseLeave events are make their way to the buttons should they move from underneith the mouse pointer
+			if(toolButtons[0]->Position.Y < y && toolButtons[0]->Position.Y+toolButtons[0]->Size.Y > y)
+			{
+				for(vector<ToolButton*>::iterator iter = toolButtons.begin(), end = toolButtons.end(); iter!=end; ++iter)
+				{
+					ToolButton * button = *iter;
+					if(button->Position.X < x && button->Position.X+button->Size.X > x)
+						button->OnMouseEnter(x, y);
+					else
+						button->OnMouseLeave(x, y);
+				}
+			}
+		}
+		else
+		{
+			scrollBar->Position.X = 0;
+		}
+		scrollBar->Size.X=scrollSize;
+	}
 }
 
 void GameView::DoMouseDown(int x, int y, unsigned button)
@@ -814,6 +1037,64 @@ void GameView::DoDraw()
 	c->Tick();
 }
 
+void GameView::NotifyNotificationsChanged(GameModel * sender)
+{
+    class NotificationButtonAction : public ui::ButtonAction
+    {
+        GameView * v;
+        Notification * notification;
+    public:
+        NotificationButtonAction(GameView * v, Notification * notification) : v(v), notification(notification) { }
+        void ActionCallback(ui::Button * sender)
+        {
+        	notification->Action();
+            //v->c->RemoveNotification(notification);
+        }
+    };
+    class CloseNotificationButtonAction : public ui::ButtonAction
+    {
+        GameView * v;
+        Notification * notification;
+    public:
+        CloseNotificationButtonAction(GameView * v, Notification * notification) : v(v), notification(notification) { }
+        void ActionCallback(ui::Button * sender)
+        {
+            v->c->RemoveNotification(notification);
+        }
+    };
+
+	for(std::vector<ui::Component*>::const_iterator iter = notificationComponents.begin(), end = notificationComponents.end(); iter != end; ++iter) {
+		ui::Component * cNotification = *iter;
+		RemoveComponent(cNotification);
+		delete cNotification;
+	}
+	notificationComponents.clear();
+
+
+	std::vector<Notification*> notifications = sender->GetNotifications();
+
+	int currentY = YRES-17;
+	for(std::vector<Notification*>::iterator iter = notifications.begin(), end = notifications.end(); iter != end; ++iter)
+	{
+		int width = (Graphics::textwidth((*iter)->Message.c_str()))+8;
+		ui::Button * tempButton = new ui::Button(ui::Point(XRES-width-22, currentY), ui::Point(width, 15), (*iter)->Message);
+		tempButton->SetActionCallback(new NotificationButtonAction(this, *iter));
+		tempButton->Appearance.BorderInactive = style::Colour::WarningTitle;
+		tempButton->Appearance.TextInactive = style::Colour::WarningTitle;
+		AddComponent(tempButton);
+		notificationComponents.push_back(tempButton);
+
+		tempButton = new ui::Button(ui::Point(XRES-20, currentY), ui::Point(15, 15));
+		tempButton->SetIcon(IconClose);
+		tempButton->SetActionCallback(new CloseNotificationButtonAction(this, *iter));
+		tempButton->Appearance.BorderInactive = style::Colour::WarningTitle;
+		tempButton->Appearance.TextInactive = style::Colour::WarningTitle;
+		AddComponent(tempButton);
+		notificationComponents.push_back(tempButton);
+
+		currentY -= 17;
+	}
+}
 
 void GameView::NotifyZoomChanged(GameModel * sender)
 {
@@ -828,29 +1109,20 @@ void GameView::NotifyLogChanged(GameModel * sender, string entry)
 		logEntries.pop_back();
 }
 
-void GameView::NotifyClipboardChanged(GameModel * sender)
+void GameView::NotifyPlaceSaveChanged(GameModel * sender)
 {
-	if(clipboardThumb)
-		delete clipboardThumb;
-	if(sender->GetClipboard())
+	if(placeSaveThumb)
+		delete placeSaveThumb;
+	if(sender->GetPlaceSave())
 	{
-		clipboardThumb = SaveRenderer::Ref().Render(sender->GetClipboard());
+		placeSaveThumb = SaveRenderer::Ref().Render(sender->GetPlaceSave());
+		selectMode = PlaceSave;
 	}
 	else
-		clipboardThumb = NULL;
-}
-
-
-void GameView::NotifyStampChanged(GameModel * sender)
-{
-	if(stampThumb)
-		delete stampThumb;
-	if(sender->GetStamp())
 	{
-		stampThumb = SaveRenderer::Ref().Render(sender->GetStamp());
+		placeSaveThumb = NULL;
+		selectMode = SelectNone;
 	}
-	else
-		stampThumb = NULL;
 }
 
 void GameView::changeColour()
@@ -864,51 +1136,61 @@ void GameView::OnDraw()
 	if(ren)
 	{
 		ren->clearScreen(1.0f);
-		ren->draw_air();
-		ren->render_parts();
-		ren->render_fire();
-		ren->draw_grav();
-		ren->DrawWalls();
-		ren->DrawSigns();
-		ren->FinaliseParts();
+		ren->RenderBegin();
 		if(activeBrush && currentMouse.X > 0 && currentMouse.X < XRES && currentMouse.Y > 0 && currentMouse.Y < YRES)
 		{
+			ui::Point finalCurrentMouse = c->PointTranslate(currentMouse);
+
 			if(drawMode==DrawRect && isMouseDown)
 			{
-				activeBrush->RenderRect(g, c->PointTranslate(drawPoint1), c->PointTranslate(currentMouse));
+				if(drawSnap)
+				{
+					finalCurrentMouse = rectSnapCoords(c->PointTranslate(drawPoint1), finalCurrentMouse);
+				}
+				activeBrush->RenderRect(g, c->PointTranslate(drawPoint1), finalCurrentMouse);
 			}
 			else if(drawMode==DrawLine && isMouseDown)
 			{
-				activeBrush->RenderLine(g, c->PointTranslate(drawPoint1), c->PointTranslate(currentMouse));
+				if(drawSnap)
+				{
+					finalCurrentMouse = lineSnapCoords(c->PointTranslate(drawPoint1), finalCurrentMouse);
+				}
+				activeBrush->RenderLine(g, c->PointTranslate(drawPoint1), finalCurrentMouse);
+			}
+			else if(drawMode==DrawFill)
+			{
+				activeBrush->RenderFill(g, finalCurrentMouse);
 			}
 			else
 			{
-				activeBrush->RenderPoint(g, c->PointTranslate(currentMouse));
+				activeBrush->RenderPoint(g, finalCurrentMouse);
 			}
 		}
-		ren->RenderZoom();
+		ren->RenderEnd();
 
 		if(selectMode!=SelectNone)
 		{
-			if(selectMode==PlaceStamp || selectMode==PlaceClipboard)
+			if(selectMode==PlaceSave)
 			{
-				Thumbnail * tempThumb = selectMode==PlaceStamp?stampThumb:clipboardThumb;
+				Thumbnail * tempThumb = placeSaveThumb;
 				if(tempThumb && selectPoint2.X!=-1)
 				{
 					int thumbX = selectPoint2.X - (tempThumb->Size.X/2);
 					int thumbY = selectPoint2.Y - (tempThumb->Size.Y/2);
 
-					if(thumbX<0)
-						thumbX = 0;
-					if(thumbX+(tempThumb->Size.X)>=XRES)
-						thumbX = XRES-tempThumb->Size.X;
+					ui::Point thumbPos = c->NormaliseBlockCoord(ui::Point(thumbX, thumbY));
 
-					if(thumbY<0)
-						thumbY = 0;
-					if(thumbY+(tempThumb->Size.Y)>=YRES)
-						thumbY = YRES-tempThumb->Size.Y;
+					if(thumbPos.X<0)
+						thumbPos.X = 0;
+					if(thumbPos.X+(tempThumb->Size.X)>=XRES)
+						thumbPos.X = XRES-tempThumb->Size.X;
 
-					g->draw_image(tempThumb->Data, thumbX, thumbY, tempThumb->Size.X, tempThumb->Size.Y, 128);
+					if(thumbPos.Y<0)
+						thumbPos.Y = 0;
+					if(thumbPos.Y+(tempThumb->Size.Y)>=YRES)
+						thumbPos.Y = YRES-tempThumb->Size.Y;
+
+					g->draw_image(tempThumb->Data, thumbPos.X, thumbPos.Y, tempThumb->Size.X, tempThumb->Size.Y, 128);
 				}
 			}
 			else
@@ -932,8 +1214,8 @@ void GameView::OnDraw()
 					g->fillrect(0, 0, XRES, y1, 0, 0, 0, 100);
 					g->fillrect(0, y2, XRES, YRES-y2, 0, 0, 0, 100);
 
-					g->fillrect(0, y1-1, x1, (y2-y1)+2, 0, 0, 0, 100);
-					g->fillrect(x2, y1-1, XRES-x2, (y2-y1)+2, 0, 0, 0, 100);
+					g->fillrect(0, y1, x1, (y2-y1), 0, 0, 0, 100);
+					g->fillrect(x2, y1, XRES-x2, (y2-y1), 0, 0, 0, 100);
 
 					g->xor_rect(x1, y1, (x2-x1)+1, (y2-y1)+1);
 				}
@@ -969,4 +1251,30 @@ void GameView::OnDraw()
 		sampleInfo << ", Ctype: " << c->ElementResolve(sample.ctype);
 
 	g->drawtext(XRES+BARSIZE-(10+Graphics::textwidth((char*)sampleInfo.str().c_str())), 10, (const char*)sampleInfo.str().c_str(), 255, 255, 255, 255);
+
+	if(infoTipPresence)
+	{
+		int infoTipAlpha = (infoTipPresence>50?50:infoTipPresence)*5;
+		g->drawtext((XRES-Graphics::textwidth((char*)infoTip.c_str()))/2, (YRES/2)-2, (char*)infoTip.c_str(), 255, 255, 255, infoTipAlpha);
+	}
+
+	if(toolTipPosition.X!=-1 && toolTipPosition.Y!=-1 && toolTip.length())
+	{
+		g->drawtext(toolTipPosition.X, toolTipPosition.Y, (char*)toolTip.c_str(), 255, 255, 255, 255);
+	}
+}
+
+ui::Point GameView::lineSnapCoords(ui::Point point1, ui::Point point2)
+{
+	ui::Point newPoint(0, 0);
+	float snapAngle = floor(atan2(point2.Y-point1.Y, point2.X-point1.X)/(M_PI*0.25)+0.5)*M_PI*0.25;
+	float lineMag = sqrtf(pow(point2.X-point1.X,2)+pow(point2.Y-point1.Y,2));
+	newPoint.X = (int)(lineMag*cos(snapAngle)+point1.X+0.5f);
+	newPoint.Y = (int)(lineMag*sin(snapAngle)+point1.Y+0.5f);
+	return newPoint;
+}
+
+ui::Point GameView::rectSnapCoords(ui::Point point1, ui::Point point2)
+{
+	return point2;
 }

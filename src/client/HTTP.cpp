@@ -23,7 +23,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef MACOSX
+#ifndef WIN32
+#include <sys/param.h>
+#endif
+#if !defined(MACOSX) && !defined(BSD)
 #include <malloc.h>
 #endif
 #include <time.h>
@@ -40,6 +43,7 @@
 #include <signal.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #endif
 
 #include "Config.h"
@@ -447,7 +451,7 @@ int http_async_req_status(void *ctx)
 		else if (PERRNO==WSAEISCONN)
 			cx->state = HTS_IDLE;
 #endif
-#ifdef MACOSX
+#if defined(MACOSX) || defined(BSD)
 		else if (PERRNO==EISCONN)
 			cx->state = HTS_IDLE;
 #endif
@@ -464,7 +468,7 @@ int http_async_req_status(void *ctx)
 		if (cx->txdl)
 		{
 			// generate POST
-			cx->tbuf = (char *)malloc(strlen(cx->host) + strlen(cx->path) + 121 + 128 + cx->txdl + cx->thlen);
+			cx->tbuf = (char *)malloc(strlen(cx->host) + strlen(cx->path) + 141 + 128 + cx->txdl + cx->thlen);
 			cx->tptr = 0;
 			cx->tlen = 0;
 			cx->tlen += sprintf(cx->tbuf+cx->tlen, "POST %s HTTP/1.1\n", cx->path);
@@ -480,12 +484,7 @@ int http_async_req_status(void *ctx)
 				cx->thlen = 0;
 			}
 			cx->tlen += sprintf(cx->tbuf+cx->tlen, "Content-Length: %d\n", cx->txdl);
-			cx->tlen += sprintf(cx->tbuf+cx->tlen, "User-Agent: PowderToy/%d.%d (%s; M%d) TPTPP/%s%d.%d.%d%s\n", SAVE_VERSION, MINOR_VERSION, IDENT_PLATFORM, 0, IDENT_VERSION, SAVE_VERSION, MINOR_VERSION, BUILD_NUM, IDENT_RELTYPE);
-//#ifdef BETA
-//			cx->tlen += sprintf(cx->tbuf+cx->tlen, "X-Powder-Version: %s%dB%d\n", IDENT_VERSION, SAVE_VERSION, MINOR_VERSION);
-//#else
-//			cx->tlen += sprintf(cx->tbuf+cx->tlen, "X-Powder-Version: %s%dS%d\n", IDENT_VERSION, SAVE_VERSION, MINOR_VERSION);
-//#endif
+			cx->tlen += sprintf(cx->tbuf+cx->tlen, "User-Agent: PowderToy/%d.%d (%s; %s; M%d) TPTPP/%d.%d.%d%s\n", SAVE_VERSION, MINOR_VERSION, IDENT_PLATFORM, IDENT_BUILD, 0, SAVE_VERSION, MINOR_VERSION, BUILD_NUM, IDENT_RELTYPE);
 			cx->tlen += sprintf(cx->tbuf+cx->tlen, "\n");
 			memcpy(cx->tbuf+cx->tlen, cx->txd, cx->txdl);
 			cx->tlen += cx->txdl;
@@ -496,7 +495,7 @@ int http_async_req_status(void *ctx)
 		else
 		{
 			// generate GET
-			cx->tbuf = (char *)malloc(strlen(cx->host) + strlen(cx->path) + 89 + 128 + cx->thlen);
+			cx->tbuf = (char *)malloc(strlen(cx->host) + strlen(cx->path) + 100 + 128 + cx->thlen);
 			cx->tptr = 0;
 			cx->tlen = 0;
 			cx->tlen += sprintf(cx->tbuf+cx->tlen, "GET %s HTTP/1.1\n", cx->path);
@@ -511,13 +510,7 @@ int http_async_req_status(void *ctx)
 			}
 			if (!cx->keep)
 				cx->tlen += sprintf(cx->tbuf+cx->tlen, "Connection: close\n");
-			cx->tlen += sprintf(cx->tbuf+cx->tlen, "User-Agent: PowderToy/%d.%d (%s; M%d) TPTPP/%s%d.%d.%d%s\n", SAVE_VERSION, MINOR_VERSION, IDENT_PLATFORM, 0, IDENT_VERSION, SAVE_VERSION, MINOR_VERSION, BUILD_NUM, IDENT_RELTYPE);
-
-/*#ifdef BETA
-			cx->tlen += sprintf(cx->tbuf+cx->tlen, "X-Powder-Version: %s%dB%d\n", IDENT_VERSION, SAVE_VERSION, MINOR_VERSION);
-#else
-			cx->tlen += sprintf(cx->tbuf+cx->tlen, "X-Powder-Version: %s%dS%d\n", IDENT_VERSION, SAVE_VERSION, MINOR_VERSION);
-#endif*/
+			cx->tlen += sprintf(cx->tbuf+cx->tlen, "User-Agent: PowderToy/%d.%d (%s; %s; M%d) TPTPP/%d.%d.%d%s\n", SAVE_VERSION, MINOR_VERSION, IDENT_PLATFORM, IDENT_BUILD, 0, SAVE_VERSION, MINOR_VERSION, BUILD_NUM, IDENT_RELTYPE);
 			cx->tlen += sprintf(cx->tbuf+cx->tlen, "\n");
 		}
 		cx->state = HTS_XMIT;

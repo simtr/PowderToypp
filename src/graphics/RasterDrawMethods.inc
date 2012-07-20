@@ -1,36 +1,12 @@
-#include "Graphics.h"
 #include "font.h"
 
-#ifndef OGLR
-
-Graphics::Graphics():
-sdl_scale(1)
-{
-	vid = (pixel *)malloc(PIXELSIZE * ((XRES+BARSIZE) * (YRES+MENUSIZE)));
-
-}
-
-Graphics::~Graphics()
-{
-	free(vid);
-}
-
-void Graphics::Clear()
-{
-	memset(vid, 0, PIXELSIZE * ((XRES+BARSIZE) * (YRES+MENUSIZE)));
-}
-
-void Graphics::Finalise()
-{
-
-}
-
-int Graphics::drawtext(int x, int y, const char *s, int r, int g, int b, int a)
+int PIXELMETHODS_CLASS::drawtext(int x, int y, const char *s, int r, int g, int b, int a)
 {
 	if(!strlen(s))
 		return 0;
 	int width, height;
 
+	int oR = r, oG = g, oB = b;
 	int characterX = x, characterY = y;
 	int startX = characterX;
 	for (; *s; s++)
@@ -40,8 +16,23 @@ int Graphics::drawtext(int x, int y, const char *s, int r, int g, int b, int a)
 			characterX = startX;
 			characterY += FONT_H+2;
 		}
+		else if (*s == '\x0F')
+		{
+			if(!s[1] || !s[2] || !s[3]) break;
+			r = s[1];
+			g = s[2];
+			b = s[3];
+			s += 3;
+		}
+		else if (*s == '\x0E')
+		{
+			r = oR;
+			g = oG;
+			b = oB;
+		}
 		else if (*s == '\b')
 		{
+			if(!s[1]) break;
 			switch (s[1])
 			{
 			case 'w':
@@ -83,12 +74,12 @@ int Graphics::drawtext(int x, int y, const char *s, int r, int g, int b, int a)
 	return x;
 }
 
-int Graphics::drawtext(int x, int y, std::string s, int r, int g, int b, int a)
+int PIXELMETHODS_CLASS::drawtext(int x, int y, std::string s, int r, int g, int b, int a)
 {
 	return drawtext(x, y, s.c_str(), r, g, b, a);
 }
 
-TPT_INLINE int Graphics::drawchar(int x, int y, int c, int r, int g, int b, int a)
+TPT_INLINE int PIXELMETHODS_CLASS::drawchar(int x, int y, int c, int r, int g, int b, int a)
 {
 	int i, j, w, bn = 0, ba = 0;
 	char *rp = font_data + font_ptrs[c];
@@ -108,7 +99,7 @@ TPT_INLINE int Graphics::drawchar(int x, int y, int c, int r, int g, int b, int 
 	return x + w;
 }
 
-TPT_INLINE int Graphics::addchar(int x, int y, int c, int r, int g, int b, int a)
+TPT_INLINE int PIXELMETHODS_CLASS::addchar(int x, int y, int c, int r, int g, int b, int a)
 {
 	int i, j, w, bn = 0, ba = 0;
 	char *rp = font_data + font_ptrs[c];
@@ -130,40 +121,40 @@ TPT_INLINE int Graphics::addchar(int x, int y, int c, int r, int g, int b, int a
 	return x + w;
 }
 
-TPT_INLINE void Graphics::xor_pixel(int x, int y)
+TPT_INLINE void PIXELMETHODS_CLASS::xor_pixel(int x, int y)
 {
 	int c;
 	if (x<0 || y<0 || x>=XRES || y>=YRES)
 		return;
-	c = vid[y*(XRES+BARSIZE)+x];
+	c = vid[y*(VIDXRES)+x];
 	c = PIXB(c) + 3*PIXG(c) + 2*PIXR(c);
 	if (c<512)
-		vid[y*(XRES+BARSIZE)+x] = PIXPACK(0xC0C0C0);
+		vid[y*(VIDXRES)+x] = PIXPACK(0xC0C0C0);
 	else
-		vid[y*(XRES+BARSIZE)+x] = PIXPACK(0x404040);
+		vid[y*(VIDXRES)+x] = PIXPACK(0x404040);
 }
 
-TPT_INLINE void Graphics::blendpixel(int x, int y, int r, int g, int b, int a)
+TPT_INLINE void PIXELMETHODS_CLASS::blendpixel(int x, int y, int r, int g, int b, int a)
 {
 	pixel t;
-	if (x<0 || y<0 || x>=XRES+BARSIZE || y>=YRES+MENUSIZE)
+	if (x<0 || y<0 || x>=VIDXRES || y>=VIDYRES)
 		return;
 	if (a!=255)
 	{
-		t = vid[y*(XRES+BARSIZE)+x];
+		t = vid[y*(VIDXRES)+x];
 		r = (a*r + (255-a)*PIXR(t)) >> 8;
 		g = (a*g + (255-a)*PIXG(t)) >> 8;
 		b = (a*b + (255-a)*PIXB(t)) >> 8;
 	}
-	vid[y*(XRES+BARSIZE)+x] = PIXRGB(r,g,b);
+	vid[y*(VIDXRES)+x] = PIXRGB(r,g,b);
 }
 
-TPT_INLINE void Graphics::addpixel(int x, int y, int r, int g, int b, int a)
+TPT_INLINE void PIXELMETHODS_CLASS::addpixel(int x, int y, int r, int g, int b, int a)
 {
 	pixel t;
-	if (x<0 || y<0 || x>=XRES+BARSIZE || y>=YRES+MENUSIZE)
+	if (x<0 || y<0 || x>=VIDXRES || y>=VIDYRES)
 		return;
-	t = vid[y*(XRES+BARSIZE)+x];
+	t = vid[y*(VIDXRES)+x];
 	r = (a*r + 255*PIXR(t)) >> 8;
 	g = (a*g + 255*PIXG(t)) >> 8;
 	b = (a*b + 255*PIXB(t)) >> 8;
@@ -173,10 +164,10 @@ TPT_INLINE void Graphics::addpixel(int x, int y, int r, int g, int b, int a)
 		g = 255;
 	if (b>255)
 		b = 255;
-	vid[y*(XRES+BARSIZE)+x] = PIXRGB(r,g,b);
+	vid[y*(VIDXRES)+x] = PIXRGB(r,g,b);
 }
 
-void Graphics::xor_line(int x1, int y1, int x2, int y2)
+void PIXELMETHODS_CLASS::xor_line(int x1, int y1, int x2, int y2)
 {
 	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
 	float e, de;
@@ -222,7 +213,7 @@ void Graphics::xor_line(int x1, int y1, int x2, int y2)
 	}
 }
 
-void Graphics::xor_rect(int x, int y, int w, int h)
+void PIXELMETHODS_CLASS::xor_rect(int x, int y, int w, int h)
 {
 	int i;
 	for (i=0; i<w; i+=2)
@@ -237,7 +228,7 @@ void Graphics::xor_rect(int x, int y, int w, int h)
 	}
 }
 
-void Graphics::xor_bitmap(unsigned char * bitmap, int x, int y, int w, int h)
+void PIXELMETHODS_CLASS::xor_bitmap(unsigned char * bitmap, int x, int y, int w, int h)
 {
 	for(int x1 = 0; x1 < w; x1++)
 	{
@@ -249,7 +240,7 @@ void Graphics::xor_bitmap(unsigned char * bitmap, int x, int y, int w, int h)
 	}
 }
 
-void Graphics::draw_line(int x1, int y1, int x2, int y2, int r, int g, int b, int a)
+void PIXELMETHODS_CLASS::draw_line(int x1, int y1, int x2, int y2, int r, int g, int b, int a)
 {
 	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
 	float e, de;
@@ -295,7 +286,7 @@ void Graphics::draw_line(int x1, int y1, int x2, int y2, int r, int g, int b, in
 	}
 }
 
-void Graphics::drawrect(int x, int y, int w, int h, int r, int g, int b, int a)
+void PIXELMETHODS_CLASS::drawrect(int x, int y, int w, int h, int r, int g, int b, int a)
 {
 	int i;
 	w--;
@@ -312,7 +303,7 @@ void Graphics::drawrect(int x, int y, int w, int h, int r, int g, int b, int a)
 	}
 }
 
-void Graphics::fillrect(int x, int y, int w, int h, int r, int g, int b, int a)
+void PIXELMETHODS_CLASS::fillrect(int x, int y, int w, int h, int r, int g, int b, int a)
 {
 	int i,j;
 	for (j=0; j<h; j++)
@@ -320,28 +311,28 @@ void Graphics::fillrect(int x, int y, int w, int h, int r, int g, int b, int a)
 			blendpixel(x+i, y+j, r, g, b, a);
 }
 
-void Graphics::gradientrect(int x, int y, int width, int height, int r, int g, int b, int a, int r2, int g2, int b2, int a2)
+void PIXELMETHODS_CLASS::gradientrect(int x, int y, int width, int height, int r, int g, int b, int a, int r2, int g2, int b2, int a2)
 {
 
 }
 
-void Graphics::clearrect(int x, int y, int w, int h)
+void PIXELMETHODS_CLASS::clearrect(int x, int y, int w, int h)
 {
 	int i;
 	for (i=1; i<h; i++)
-		memset(vid+(x+1+(XRES+BARSIZE)*(y+i)), 0, PIXELSIZE*(w-1));
+		memset(vid+(x+1+(VIDXRES)*(y+i)), 0, PIXELSIZE*(w-1));
 }
 
-void Graphics::draw_image(pixel *img, int x, int y, int w, int h, int a)
+void PIXELMETHODS_CLASS::draw_image(pixel *img, int x, int y, int w, int h, int a)
 {
 	int i, j, r, g, b;
 	if (!img) return;
-	if(y + h > YRES+MENUSIZE) h = (YRES+MENUSIZE)-y; //Adjust height to prevent drawing off the bottom
+	if(y + h > VIDYRES) h = (VIDYRES)-y; //Adjust height to prevent drawing off the bottom
 	if(a >= 255)
 		for (j=0; j<h; j++)
 			for (i=0; i<w; i++)
 			{
-				vid[(y+j)*(XRES+BARSIZE)+(x+i)] = *img;
+				vid[(y+j)*(VIDXRES)+(x+i)] = *img;
 				img++;
 			}
 	else
@@ -355,5 +346,3 @@ void Graphics::draw_image(pixel *img, int x, int y, int w, int h, int a)
 				img++;
 			}
 }
-
-#endif

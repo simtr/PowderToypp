@@ -6,10 +6,11 @@
 #include "client/SaveInfo.h"
 #include "simulation/Simulation.h"
 #include "interface/Colour.h"
-#include "Renderer.h"
+#include "graphics/Renderer.h"
 #include "GameView.h"
 #include "Brush.h"
 #include "client/User.h"
+#include "Notification.h"
 
 #include "Tool.h"
 #include "Menu.h"
@@ -32,10 +33,12 @@ public:
 class GameModel
 {
 private:
+	vector<Notification*> notifications;
 	//int clipboardSize;
 	//unsigned char * clipboardData;
 	GameSave * stamp;
 	GameSave * clipboard;
+	GameSave * placeSave;
 	deque<string> consoleLog;
 	vector<GameView*> observers;
 	vector<Tool*> toolList;
@@ -50,6 +53,9 @@ private:
 	User currentUser;
 	bool colourSelector;
 	ui::Colour colour;
+
+	std::string infoTip;
+	std::string toolTip;
 	//bool zoomEnabled;
 	void notifyRendererChanged();
 	void notifySimulationChanged();
@@ -63,10 +69,13 @@ private:
 	void notifyUserChanged();
 	void notifyZoomChanged();
 	void notifyClipboardChanged();
-	void notifyStampChanged();
+	void notifyPlaceSaveChanged();
 	void notifyColourSelectorColourChanged();
 	void notifyColourSelectorVisibilityChanged();
+	void notifyNotificationsChanged();
 	void notifyLogChanged(string entry);
+	void notifyInfoTipChanged();
+	void notifyToolTipChanged();
 public:
 	GameModel();
 	~GameModel();
@@ -76,6 +85,11 @@ public:
 
 	void SetColourSelectorColour(ui::Colour colour);
 	ui::Colour GetColourSelectorColour();
+
+	void SetToolTip(std::string text);
+	void SetInfoTip(std::string text);
+	std::string GetToolTip();
+	std::string GetInfoTip();
 
 	void SetVote(int direction);
 	SaveInfo * GetSave();
@@ -113,10 +127,16 @@ public:
 	void SetStamp(GameSave * newStamp);
 	void AddStamp(GameSave * save);
 	void SetClipboard(GameSave * save);
+	void SetPlaceSave(GameSave * save);
 	void Log(string message);
 	deque<string> GetLog();
 	GameSave * GetClipboard();
 	GameSave * GetStamp();
+	GameSave * GetPlaceSave();
+
+	std::vector<Notification*> GetNotifications();
+	void AddNotification(Notification * notification);
+	void RemoveNotification(Notification * notification);
 };
 
 #endif // GAMEMODEL_H

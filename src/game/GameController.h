@@ -16,15 +16,18 @@
 //#include "cat/TPTScriptInterface.h"
 #include "cat/LuaScriptInterface.h"
 #include "options/OptionsController.h"
+#include "client/ClientListener.h"
+#include "RenderPreset.h"
 #include "Menu.h"
 
 using namespace std;
 
+class Notification;
 class GameModel;
 class GameView;
 class CommandInterface;
 class ConsoleController;
-class GameController
+class GameController: public ClientListener
 {
 private:
 	//Simulation * sim;
@@ -40,6 +43,7 @@ private:
 	OptionsController * options;
 	CommandInterface * commandInterface;
 public:
+	bool HasDone;
 	class LoginCallback;
 	class SearchCallback;
 	class RenderCallback;
@@ -58,7 +62,9 @@ public:
 	bool KeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 	bool KeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 	void Tick();
+	void Exit();
 
+	void LoadRenderPreset(RenderPreset preset);
 	void SetZoomEnabled(bool zoomEnable);
 	void SetZoomPosition(ui::Point position);
 	void AdjustBrushSize(int direction, bool logarithmic = false);
@@ -78,6 +84,7 @@ public:
 	void SetActiveMenu(Menu * menu);
 	void SetActiveTool(int toolSelection, Tool * tool);
 	void SetColour(ui::Colour colour);
+	void SetToolStrength(float value);
 	void OpenSearch();
 	void OpenLogin();
 	void OpenTags();
@@ -85,16 +92,27 @@ public:
 	void OpenRenderOptions();
 	void OpenSaveWindow();
 	void OpenStamps();
-	void PlaceStamp(ui::Point position);
-	void PlaceClipboard(ui::Point position);
+	void OpenElementSearch();
+	void PlaceSave(ui::Point position);
 	void ClearSim();
 	void ReloadSim();
 	void Vote(int direction);
 	void ChangeBrush();
 	void ShowConsole();
 	void FrameStep();
+	void TranslateSave(ui::Point point);
+	void TransformSave(matrix2d transform);
 	ui::Point PointTranslate(ui::Point point);
+	ui::Point NormaliseBlockCoord(ui::Point point);
 	std::string ElementResolve(int type);
+
+	void LoadClipboard();
+	void LoadStamp();
+
+	void RemoveNotification(Notification * notification);
+
+	virtual void NotifyUpdateAvailable(Client * sender);
+	void RunUpdater();
 };
 
 #endif // GAMECONTROLLER_H

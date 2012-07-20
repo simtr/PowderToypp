@@ -25,8 +25,8 @@ protected:
 		if(!bitmap)
 			return;
 		if(outline)
-			free(outline);
-		outline = (unsigned char *)calloc(size.X*size.Y, sizeof(unsigned char));
+			delete[] outline;
+		outline = new unsigned char[size.X*size.Y];
 		for(int x = 0; x < size.X; x++)
 		{
 			for(int y = 0; y < size.Y; y++)
@@ -63,18 +63,15 @@ public:
 	{
 		this->radius = radius;
 		this->size = radius+radius+ui::Point(1, 1);
-		
-		std::cout << "Radius: " << radius.X << " " << radius.Y << std::endl;
-		std::cout << "Size: " << size.X << " " << size.Y << std::endl;
-		
+
 		GenerateBitmap();
 		updateOutline();
 	}
 	virtual ~Brush() {
 		if(bitmap)
-			delete bitmap;
+			delete[] bitmap;
 		if(outline)
-			delete outline;
+			delete[] outline;
 	}
 	virtual void RenderRect(Graphics * g, ui::Point position1, ui::Point position2)
 	{
@@ -109,11 +106,15 @@ public:
 			return;
 		g->xor_bitmap(outline, position.X-radius.X, position.Y-radius.Y, size.X, size.Y);
 	}
+	virtual void RenderFill(Graphics * g, ui::Point position)
+	{
+		//Do nothing for now - possibly draw some sort of flood fill mask
+	}
 	virtual void GenerateBitmap()
 	{
 		if(bitmap)
-			free(bitmap);
-		bitmap = (unsigned char *)calloc((size.X*size.Y), sizeof(unsigned char));
+			delete[] bitmap;
+		bitmap = new unsigned char[size.X*size.Y];
 		for(int x = 0; x < size.X; x++)
 		{
 			for(int y = 0; y < size.Y; y++)

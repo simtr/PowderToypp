@@ -39,11 +39,11 @@ Element_SLTW::Element_SLTW()
     HighPressureTransition = NT;
     LowTemperature = 233.0f;
     LowTemperatureTransition = PT_ICEI;
-    HighTemperature = 483.0f;
+    HighTemperature = 383.0f;
     HighTemperatureTransition = ST;
     
     Update = &Element_SLTW::update;
-    Graphics = NULL;
+    
 }
 
 //#TPT-Directive ElementHeader Element_SLTW static int update(UPDATE_FUNC_ARGS)

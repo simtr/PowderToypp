@@ -2,7 +2,8 @@
 #include "GameModel.h"
 #include "GameView.h"
 #include "simulation/Simulation.h"
-#include "Renderer.h"
+#include "simulation/Air.h"
+#include "graphics/Renderer.h"
 #include "interface/Point.h"
 #include "Brush.h"
 #include "EllipseBrush.h"
@@ -18,7 +19,8 @@ GameModel::GameModel():
 	currentSave(NULL),
 	colourSelector(false),
 	clipboard(NULL),
-	stamp(NULL)
+	stamp(NULL),
+	placeSave(NULL)
 {
 	sim = new Simulation();
 	ren = new Renderer(ui::Engine::Ref().g, sim);
@@ -28,33 +30,19 @@ GameModel::GameModel():
 	//Load config into renderer
 	try
 	{
-		json::Number tempNumber = Client::Ref().configDocument["Renderer"]["ColourMode"];
-		if(tempNumber.Value())
-			ren->SetColourMode(tempNumber.Value());
+		ren->SetColourMode(Client::Ref().GetPrefNumber("Renderer.ColourMode", 0));
 
-		json::Array tempArray = Client::Ref().configDocument["Renderer"]["DisplayModes"];
-		if(tempArray.Size())
+		vector<double> tempArray = Client::Ref().GetPrefNumberArray("Renderer.DisplayModes");
+		if(tempArray.size())
 		{
-			std::vector<unsigned int> displayModes;
-			json::Array::const_iterator itDisplayModes(tempArray.Begin()), itDisplayModesEnd(tempArray.End());
-			for (; itDisplayModes != itDisplayModesEnd; ++itDisplayModes)
-			{
-				json::Number tempNumberI = *itDisplayModes;
-				displayModes.push_back(tempNumberI.Value());
-			}
+			std::vector<unsigned int> displayModes(tempArray.begin(), tempArray.end());
 			ren->SetDisplayMode(displayModes);
 		}
 
-		tempArray = Client::Ref().configDocument["Renderer"]["RenderModes"];
-		if(tempArray.Size())
+		tempArray = Client::Ref().GetPrefNumberArray("Renderer.RenderModes");
+		if(tempArray.size())
 		{
-			std::vector<unsigned int> renderModes;
-			json::Array::const_iterator itRenderModes(tempArray.Begin()), itRenderModesEnd(tempArray.End());
-			for (; itRenderModes != itRenderModesEnd; ++itRenderModes)
-			{
-				json::Number tempNumberI = *itRenderModes;
-				renderModes.push_back(tempNumberI.Value());
-			}
+			std::vector<unsigned int> renderModes(tempArray.begin(), tempArray.end());
 			ren->SetRenderMode(renderModes);
 		}
 	}
@@ -73,7 +61,15 @@ GameModel::GameModel():
 	{
 		if(sim->elements[i].MenuSection < 12 && sim->elements[i].Enabled && sim->elements[i].MenuVisible)
 		{
-			Tool * tempTool = new ElementTool(i, sim->elements[i].Name, PIXR(sim->elements[i].Colour), PIXG(sim->elements[i].Colour), PIXB(sim->elements[i].Colour));
+			Tool * tempTool;
+			if(i == PT_LIGH)
+			{
+				tempTool = new Element_LIGH_Tool(i, sim->elements[i].Name, sim->elements[i].Description, PIXR(sim->elements[i].Colour), PIXG(sim->elements[i].Colour), PIXB(sim->elements[i].Colour));
+			}
+			else
+			{
+				tempTool = new ElementTool(i, sim->elements[i].Name, sim->elements[i].Description, PIXR(sim->elements[i].Colour), PIXG(sim->elements[i].Colour), PIXB(sim->elements[i].Colour));
+			}
 			menuList[sim->elements[i].MenuSection]->AddTool(tempTool);
 		}
 	}
@@ -81,14 +77,14 @@ GameModel::GameModel():
 	//Build menu for GOL types
 	for(int i = 0; i < NGOL; i++)
 	{
-		Tool * tempTool = new GolTool(i, sim->gmenu[i].name, PIXR(sim->gmenu[i].colour), PIXG(sim->gmenu[i].colour), PIXB(sim->gmenu[i].colour));
+		Tool * tempTool = new GolTool(i, sim->gmenu[i].name, std::string(sim->gmenu[i].description), PIXR(sim->gmenu[i].colour), PIXG(sim->gmenu[i].colour), PIXB(sim->gmenu[i].colour));
 		menuList[SC_LIFE]->AddTool(tempTool);
 	}
 
 	//Build other menus from wall data
 	for(int i = 0; i < UI_WALLCOUNT; i++)
 	{
-		Tool * tempTool = new WallTool(i, "", PIXR(sim->wtypes[i].colour), PIXG(sim->wtypes[i].colour), PIXB(sim->wtypes[i].colour));
+		Tool * tempTool = new WallTool(i, "", std::string(sim->wtypes[i].descs), PIXR(sim->wtypes[i].colour), PIXG(sim->wtypes[i].colour), PIXB(sim->wtypes[i].colour));
 		menuList[SC_WALL]->AddTool(tempTool);
 		//sim->wtypes[i]
 	}
@@ -100,17 +96,18 @@ GameModel::GameModel():
 	//Build menu for simtools
 	for(int i = 0; i < sim->tools.size(); i++)
 	{
-		Tool * tempTool = new Tool(i, sim->tools[i]->Name, PIXR(sim->tools[i]->Colour), PIXG(sim->tools[i]->Colour), PIXB(sim->tools[i]->Colour));
+		Tool * tempTool;
+		tempTool = new Tool(i, sim->tools[i]->Name, sim->tools[i]->Description, PIXR(sim->tools[i]->Colour), PIXG(sim->tools[i]->Colour), PIXB(sim->tools[i]->Colour));
 		menuList[SC_TOOL]->AddTool(tempTool);
 	}
 
 	//Add decoration tools to menu
-	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendAdd, "ADD", 0, 0, 0));
-	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendRemove, "SUB", 0, 0, 0));
-	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendMultiply, "MUL", 0, 0, 0));
-	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendDivide, "DIV", 0, 0, 0));
-	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSmudge, "SMDG", 0, 0, 0));
-	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSet, "SET", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendAdd, "ADD", "Colour blending: Add", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendRemove, "SUB", "Colour blending: Subtract", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendMultiply, "MUL", "Colour blending: Multiply", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendDivide, "DIV", "Colour blending: Divide" , 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSmudge, "SMDG", "Smudge colour", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSet, "SET", "Set colour (No blending)", 0, 0, 0));
 
 	//Set default brush palette
 	brushList.push_back(new EllipseBrush(ui::Point(4, 4)));
@@ -129,40 +126,30 @@ GameModel::GameModel():
 	{
 		currentUser = Client::Ref().GetAuthUser();
 	}
+
+	//Set stamp to first stamp in list
+	vector<string> stamps = Client::Ref().GetStamps(0, 1);
+	if(stamps.size()>0)
+	{
+		SaveFile * stampFile = Client::Ref().GetStamp(stamps[0]);
+		if(stampFile && stampFile->GetGameSave())
+			stamp = stampFile->GetGameSave();
+	}
 }
 
 GameModel::~GameModel()
 {
 	//Save to config:
-	try
-	{
-		Client::Ref().configDocument["Renderer"]["ColourMode"] = json::Number(ren->GetColourMode());
+	Client::Ref().SetPref("Renderer.ColourMode", (double)ren->GetColourMode());
 
-		Client::Ref().configDocument["Renderer"]["DisplayModes"] = json::Array();
-		std::vector<unsigned int> displayModes = ren->GetDisplayMode();
-		for (int i = 0; i < displayModes.size(); i++)
-		{
-			Client::Ref().configDocument["Renderer"]["DisplayModes"][i] = json::Number(displayModes[i]);
-		}
+	std::vector<unsigned int> displayModes = ren->GetDisplayMode();
+	Client::Ref().SetPref("Renderer.DisplayModes", std::vector<double>(displayModes.begin(), displayModes.end()));
 
-		Client::Ref().configDocument["Renderer"]["RenderModes"] = json::Array();
-		std::vector<unsigned int> renderModes = ren->GetRenderMode();
-		for (int i = 0; i < renderModes.size(); i++)
-		{
-			Client::Ref().configDocument["Renderer"]["RenderModes"][i] = json::Number(renderModes[i]);
-		}
-	}
-	catch(json::Exception & e)
-	{
-
-	}
+	std::vector<unsigned int> renderModes = ren->GetRenderMode();
+	Client::Ref().SetPref("Renderer.RenderModes", std::vector<double>(renderModes.begin(), renderModes.end()));
 
 	for(int i = 0; i < menuList.size(); i++)
 	{
-		for(int j = 0; i < menuList[i]->GetToolList().size(); i++)
-		{
-			delete menuList[i]->GetToolList()[j];
-		}
 		delete menuList[i];
 	}
 	for(int i = 0; i < brushList.size(); i++)
@@ -175,6 +162,8 @@ GameModel::~GameModel()
 		delete clipboard;
 	if(stamp)
 		delete stamp;
+	if(currentSave)
+		delete currentSave;
 	//if(activeTools)
 	//	delete[] activeTools;
 }
@@ -270,20 +259,36 @@ SaveInfo * GameModel::GetSave()
 
 void GameModel::SetSave(SaveInfo * newSave)
 {
-	if(currentSave)
-		delete currentSave;
-	currentSave = newSave;
-	if(currentSave)
+	if(currentSave != newSave)
 	{
-		int returnVal = sim->Load(currentSave->GetGameSave());
-		if(returnVal){
+		if(currentSave)
 			delete currentSave;
+		if(newSave == NULL)
 			currentSave = NULL;
-			throw GameModelException(returnVal==2?"Save from newer version":"Save data corrupt");
+		else
+			currentSave = new SaveInfo(*newSave);
+	}
+
+	if(currentSave && currentSave->GetGameSave())
+	{
+		GameSave * saveData = currentSave->GetGameSave();
+		SetPaused(saveData->paused & GetPaused());
+		sim->gravityMode = saveData->gravityMode;
+		sim->air->airMode = saveData->airMode;
+		sim->legacy_enable = saveData->legacyEnable;
+		sim->water_equal_test = saveData->waterEEnabled;
+		if(saveData->gravityEnable && !sim->grav->ngrav_enable)
+		{
+			sim->grav->start_grav_async();
 		}
+		else if(!saveData->gravityEnable && sim->grav->ngrav_enable)
+		{
+			sim->grav->stop_grav_async();
+		}
+		sim->clear_sim();
+		sim->Load(saveData);
 	}
 	notifySaveChanged();
-	notifyPausedChanged();
 }
 
 Simulation * GameModel::GetSimulation()
@@ -431,10 +436,26 @@ void GameModel::ClearSimulation()
 
 void GameModel::SetStamp(GameSave * save)
 {
-	if(stamp)
-		delete stamp;
-	stamp = new GameSave(*save);
-	notifyStampChanged();
+	if(stamp != save)
+	{
+		if(stamp)
+			delete stamp;
+		if(save)
+			stamp = new GameSave(*save);
+		else
+			stamp = NULL;
+	}
+}
+
+void GameModel::SetPlaceSave(GameSave * save)
+{
+	if(save != placeSave)
+		delete placeSave;
+	if(save != placeSave)
+		placeSave = new GameSave(*save);
+	else if(!save)
+		placeSave = NULL;
+	notifyPlaceSaveChanged();
 }
 
 void GameModel::AddStamp(GameSave * save)
@@ -443,7 +464,6 @@ void GameModel::AddStamp(GameSave * save)
 		delete stamp;
 	stamp = new GameSave(*save);
 	Client::Ref().AddStamp(save);
-	notifyClipboardChanged();
 }
 
 void GameModel::SetClipboard(GameSave * save)
@@ -451,12 +471,16 @@ void GameModel::SetClipboard(GameSave * save)
 	if(clipboard)
 		delete clipboard;
 	clipboard = save;
-	notifyClipboardChanged();
 }
 
 GameSave * GameModel::GetClipboard()
 {
 	return clipboard;
+}
+
+GameSave * GameModel::GetPlaceSave()
+{
+	return placeSave;
 }
 
 GameSave * GameModel::GetStamp()
@@ -475,6 +499,61 @@ void GameModel::Log(string message)
 deque<string> GameModel::GetLog()
 {
 	return consoleLog;
+}
+
+std::vector<Notification*> GameModel::GetNotifications()
+{
+	return notifications;
+}
+
+void GameModel::AddNotification(Notification * notification)
+{
+	notifications.push_back(notification);
+	notifyNotificationsChanged();
+}
+
+void GameModel::RemoveNotification(Notification * notification)
+{
+	for(std::vector<Notification*>::iterator iter = notifications.begin(); iter != notifications.end(); ++iter)
+	{
+		if(*iter == notification)
+		{
+			notifications.erase(iter);
+			delete *iter;
+			break;
+		}
+	}
+	notifyNotificationsChanged();
+}
+
+void GameModel::SetToolTip(std::string text)
+{
+	toolTip = text;
+	notifyToolTipChanged();
+}
+
+void GameModel::SetInfoTip(std::string text)
+{
+	infoTip = text;
+	notifyInfoTipChanged();
+}
+
+std::string GameModel::GetToolTip()
+{
+	return toolTip;
+}
+
+std::string GameModel::GetInfoTip()
+{
+	return infoTip;
+}
+
+void GameModel::notifyNotificationsChanged()
+{
+	for(std::vector<GameView*>::iterator iter = observers.begin(); iter != observers.end(); ++iter)
+	{
+		(*iter)->NotifyNotificationsChanged(this);
+	}
 }
 
 void GameModel::notifyColourSelectorColourChanged()
@@ -581,19 +660,11 @@ void GameModel::notifyZoomChanged()
 	}
 }
 
-void GameModel::notifyStampChanged()
+void GameModel::notifyPlaceSaveChanged()
 {
 	for(int i = 0; i < observers.size(); i++)
 	{
-		observers[i]->NotifyStampChanged(this);
-	}
-}
-
-void GameModel::notifyClipboardChanged()
-{
-	for(int i = 0; i < observers.size(); i++)
-	{
-		observers[i]->NotifyClipboardChanged(this);
+		observers[i]->NotifyPlaceSaveChanged(this);
 	}
 }
 
@@ -602,5 +673,21 @@ void GameModel::notifyLogChanged(string entry)
 	for(int i = 0; i < observers.size(); i++)
 	{
 		observers[i]->NotifyLogChanged(this, entry);
+	}
+}
+
+void GameModel::notifyInfoTipChanged()
+{
+	for(int i = 0; i < observers.size(); i++)
+	{
+		observers[i]->NotifyInfoTipChanged(this);
+	}
+}
+
+void GameModel::notifyToolTipChanged()
+{
+	for(int i = 0; i < observers.size(); i++)
+	{
+		observers[i]->NotifyToolTipChanged(this);
 	}
 }

@@ -26,3 +26,10 @@ Makefile.me
 *.manifest
 *.manifest.res
 *.pdb
+*.sublime-*
+*.project
+*.cproject
+*.settings
+config.log
+*.sconsign.dblite
+*.sconf_temp

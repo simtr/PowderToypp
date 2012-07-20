@@ -1,71 +1,8 @@
-#include "Graphics.h"
-#include "font.h"
-
-#ifdef OGLR
-
-Graphics::Graphics():
-sdl_scale(1)
-{
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	
-	//glOrtho(0, (XRES+BARSIZE)*sdl_scale, 0, (YRES+MENUSIZE)*sdl_scale, -1, 1);
-	glOrtho(0, (XRES+BARSIZE)*sdl_scale, (YRES+MENUSIZE)*sdl_scale, 0, -1, 1);
-	
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	
-	
-	//glRasterPos2i(0, (YRES+MENUSIZE));
-	glRasterPos2i(0, 0);
-	glPixelZoom(1, 1);
-	
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	
-	//Texture for main UI
-	glEnable(GL_TEXTURE_2D);
-	
-	glGenTextures(1, &vidBuf);
-	glBindTexture(GL_TEXTURE_2D, vidBuf);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, XRES+BARSIZE, YRES+MENUSIZE, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
-	
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-	
-	glBindTexture(GL_TEXTURE_2D, 0);
-	
-	glGenTextures(1, &textTexture);
-	glBindTexture(GL_TEXTURE_2D, textTexture);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	
-	glBindTexture(GL_TEXTURE_2D, 0);
-	
-	glDisable(GL_TEXTURE_2D);
-}
-
-Graphics::~Graphics()
-{
-}
-
-void Graphics::Clear()
-{
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-}
-
-void Graphics::Finalise()
-{
-    glFlush();
-}
-
 int Graphics::drawtext(int x, int y, const char *s, int r, int g, int b, int a)
 {
 	if(!strlen(s))
 		return 0;
+	int oR = r, oG = g, oB = b;
 	int width, height;
 	Graphics::textsize(s, width, height);
 	VideoBuffer texture(width, height);
@@ -78,12 +15,27 @@ int Graphics::drawtext(int x, int y, const char *s, int r, int g, int b, int a)
 			characterX = startX;
 			characterY += FONT_H+2;
 		}
+		else if (*s == '\x0F')
+		{
+			if(!s[1] || !s[2] || !s[3]) break;
+			r = s[1];
+			g = s[2];
+			b = s[3];
+			s += 3;
+		}
+		else if (*s == '\x0E')
+		{
+			r = oR;
+			g = oG;
+			b = oB;
+		}
 		else if (*s == '\b')
 		{
+			if(!s[1]) break;
 			switch (s[1])
 			{
 			case 'w':
-				r = g = b = 255;
+				r = g = b = 255; 
 				break;
 			case 'g':
 				r = g = b = 192;
@@ -297,16 +249,21 @@ void Graphics::draw_line(int x, int y, int x2, int y2, int r, int g, int b, int 
 
 void Graphics::drawrect(int x, int y, int width, int height, int r, int g, int b, int a)
 {
-	x++;
-	height--;
-	width--;
+	float fx = float(x)+0.5f;
+	float fy = float(y)+0.5f;
+	float fwidth = width-1.0f;
+	float fheight = height-1.0f;
+	//x++;
+	//y++;
+	//height-=2;
+	//width-=2;
 	glColor4ub(r, g, b, a);
 	glBegin(GL_LINE_STRIP);
-	glVertex2f(x, y);
-	glVertex2f(x+width, y);
-	glVertex2f(x+width, y+height);
-	glVertex2f(x, y+height+1); //+1 is a hack to prevent squares from missing their corners, will make smoothed lines look like SHIT
-	glVertex2f(x, y);
+	glVertex2f(fx, fy);
+	glVertex2f(fx+fwidth, fy);
+	glVertex2f(fx+fwidth, fy+fheight);
+	glVertex2f(fx, fy+fheight); //+1 is a hack to prevent squares from missing their corners, will make smoothed lines look like SHIT
+	glVertex2f(fx, fy);
 	glEnd();
 }
 
@@ -372,5 +329,3 @@ void Graphics::draw_image(pixel *img, int x, int y, int w, int h, int a)
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 }
-
-#endif

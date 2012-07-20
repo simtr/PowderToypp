@@ -1,5 +1,7 @@
 #ifdef USE_SDL
 
+#include <map>
+#include <string>
 #include <time.h>
 #include "SDL.h"
 #ifdef WIN32
@@ -9,7 +11,7 @@
 #include <sstream>
 #include <string>
 #include "Config.h"
-#include "Graphics.h"
+#include "graphics/Graphics.h"
 #if defined(LIN32) || defined(LIN64)
 #include "icon.h"
 #endif
@@ -20,6 +22,9 @@
 #include "interface/ControlFactory.h"
 #include "interface/Point.h"
 #include "interface/Label.h"
+#include "simulation/SaveRenderer.h"
+#include "client/Client.h"
+#include "Misc.h"
 
 #include "game/GameController.h"
 #include "game/GameView.h"
@@ -36,7 +41,7 @@ extern "C" IMAGE_DOS_HEADER __ImageBase;
 
 SDL_Surface * sdl_scrn;
 
-#ifdef OGLR
+#ifdef OGLI
 void blit()
 {
 	SDL_GL_SwapBuffers();
@@ -108,13 +113,13 @@ SDL_Surface * SDLOpen()
 	SDL_WM_SetCaption("The Powder Toy", "Powder Toy");
 	//SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
 	atexit(SDL_Quit);
-#ifndef OGLR
+#ifndef OGLI
 	surface = SDL_SetVideoMode(XRES + BARSIZE, YRES + MENUSIZE, 32, SDL_SWSURFACE);
 #else
-	surface = SDL_SetVideoMode(XRES + BARSIZE, YRES + MENUSIZE, 32, SDL_OPENGL);
+	surface = SDL_SetVideoMode((XRES + BARSIZE), (YRES + MENUSIZE), 32, SDL_OPENGL | SDL_RESIZABLE);
 #endif
 
-#if defined(WIN32) && defined(OGLR)
+#if defined(OGLI)
 	int status = glewInit();
 	if(status != GLEW_OK)
 	{
@@ -126,14 +131,81 @@ SDL_Surface * SDLOpen()
 return surface;
 }
 
+std::map<std::string, std::string> readArguments(int argc, char * argv[])
+{
+	std::map<std::string, std::string> arguments;
+
+	//Defaults 
+	arguments["scale"] = "";
+	arguments["proxy"] = "";
+	arguments["nohud"] = "false";
+	arguments["sound"] = "false";
+	arguments["kiosk"] = "false";
+	arguments["scripts"] = "false";
+	arguments["open"] = "";
+	arguments["ddir"] = "";
+	arguments["ptsave"] = "";
+
+	for (int i=1; i<argc; i++)
+	{
+		if (!strncmp(argv[i], "scale:", 6) && argv[i]+6)
+		{
+			arguments["scale"] = std::string(argv[i]+6);
+		}
+		else if (!strncmp(argv[i], "proxy:", 6) && argv[i]+6)
+		{
+			arguments["proxy"] =  std::string(argv[i]+6);
+		}
+		else if (!strncmp(argv[i], "nohud", 5))
+		{
+			arguments["nohud"] = "true";
+		}
+		else if (!strncmp(argv[i], "kiosk", 5))
+		{
+			arguments["kiosk"] = "true";
+		}
+		else if (!strncmp(argv[i], "sound", 5))
+		{
+			arguments["sound"] = "true";
+		}
+		else if (!strncmp(argv[i], "scripts", 8))
+		{
+			arguments["scripts"] = "true";
+		}
+		else if (!strncmp(argv[i], "open", 5) && i+1<argc)
+		{
+			arguments["open"] = std::string(argv[i+1]);;
+			i++;
+		}
+		else if (!strncmp(argv[i], "ddir", 5) && i+1<argc)
+		{
+			arguments["ddir"] = std::string(argv[i+1]);
+			i++;
+		}
+		else if (!strncmp(argv[i], "ptsave", 7) && i+1<argc)
+		{
+			arguments["ptsave"] = std::string(argv[i+1]);
+			i++;
+			break;
+		}
+	}
+	return arguments;
+}
+
 int main(int argc, char * argv[])
 {
 	int elapsedTime = 0, currentTime = 0, lastTime = 0, currentFrame = 0;
-	float fps = 0, delta = 1.0f;
+	unsigned int lastTick = 0;
+	float fps = 0, delta = 1.0f, inputScale = 1.0f;
+	float currentWidth = XRES+BARSIZE, currentHeight = YRES+MENUSIZE;
+
+	std::map<std::string, std::string> arguments = readArguments(argc, argv);
 
 	sdl_scrn = SDLOpen();
-#ifdef OGLR
+#ifdef OGLI
 	SDL_GL_SetAttribute (SDL_GL_DOUBLEBUFFER, 1);
+	//glScaled(2.0f, 2.0f, 1.0f);
+
 #endif
 	
 	ui::Engine::Ref().g = new Graphics();
@@ -144,8 +216,6 @@ int main(int argc, char * argv[])
 
 	GameController * gameController = new GameController();
 	engine->ShowWindow(gameController->GetView());
-
-	//new ErrorMessage("Error", "This is a test error message");
 
 	SDL_Event event;
 	while(engine->Running())
@@ -165,26 +235,49 @@ int main(int argc, char * argv[])
 				engine->onKeyRelease(event.key.keysym.sym, event.key.keysym.unicode, event.key.keysym.mod&KEY_MOD_SHIFT, event.key.keysym.mod&KEY_MOD_CONTROL, event.key.keysym.mod&KEY_MOD_ALT);
 				break;
 			case SDL_MOUSEMOTION:
-				engine->onMouseMove(event.motion.x, event.motion.y);
+				engine->onMouseMove(event.motion.x*inputScale, event.motion.y*inputScale);
 				break;
 			case SDL_MOUSEBUTTONDOWN:
 				if(event.button.button == SDL_BUTTON_WHEELUP)
 				{
-					engine->onMouseWheel(event.motion.x, event.motion.y, 1);
+					engine->onMouseWheel(event.motion.x*inputScale, event.motion.y*inputScale, 1);
 				}
 				else if (event.button.button == SDL_BUTTON_WHEELDOWN)
 				{
-					engine->onMouseWheel(event.motion.x, event.motion.y, -1);
+					engine->onMouseWheel(event.motion.x*inputScale, event.motion.y*inputScale, -1);
 				}
 				else
 				{
-					engine->onMouseClick(event.motion.x, event.motion.y, event.button.button);
+					engine->onMouseClick(event.motion.x*inputScale, event.motion.y*inputScale, event.button.button);
 				}
 				break;
 			case SDL_MOUSEBUTTONUP:
 				if(event.button.button != SDL_BUTTON_WHEELUP && event.button.button != SDL_BUTTON_WHEELDOWN)
-					engine->onMouseUnclick(event.motion.x, event.motion.y, event.button.button);
+					engine->onMouseUnclick(event.motion.x*inputScale, event.motion.y*inputScale, event.button.button);
 				break;
+#ifdef OGLI
+			case SDL_VIDEORESIZE:
+				float ratio = float(XRES+BARSIZE) / float(YRES+MENUSIZE);
+				float width = event.resize.w;
+				float height = width/ratio;
+
+				sdl_scrn = SDL_SetVideoMode(event.resize.w, height, 32, SDL_OPENGL | SDL_RESIZABLE);
+
+				glViewport(0, 0, width, height);
+				engine->g->Reset();
+				//glScaled(width/currentWidth, height/currentHeight, 1.0f);
+
+				currentWidth = width;
+				currentHeight = height;
+				inputScale = float(XRES+BARSIZE)/currentWidth;
+
+				glLineWidth(currentWidth/float(XRES+BARSIZE));
+				if(sdl_scrn == NULL)
+				{
+					std::cerr << "Oh bugger" << std::endl;
+				}
+				break;
+#endif
 			}
 			event.type = 0; //Clear last event
 		}
@@ -192,7 +285,14 @@ int main(int argc, char * argv[])
 		engine->Tick();
 		engine->Draw();
 		
-#ifdef OGLR
+		if(SDL_GetTicks()-lastTick>500)
+		{
+			//Run client tick every second
+			lastTick = SDL_GetTicks();
+			Client::Ref().Tick();
+		}
+
+#ifdef OGLI
 		blit();
 #else
 		blit(engine->g->vid);
@@ -229,6 +329,7 @@ int main(int argc, char * argv[])
 	ui::Engine::Ref().CloseWindow();
 	delete gameController;
 	delete ui::Engine::Ref().g;
+	Client::Ref().Shutdown();
 	return 0;
 }
 

@@ -43,7 +43,7 @@ Element_BANG::Element_BANG()
     HighTemperatureTransition = NT;
     
     Update = &Element_BANG::update;
-    Graphics = NULL;
+    
 }
 
 //#TPT-Directive ElementHeader Element_BANG static int update(UPDATE_FUNC_ARGS)
@@ -77,6 +77,7 @@ int Element_BANG::update(UPDATE_FUNC_ARGS)
 	{
 		int tempvalue = 2;
 		sim->flood_prop(x, y, offsetof(Particle, tmp), &tempvalue, StructProperty::Integer);
+		parts[i].tmp = 2;
 	}
 	else if(parts[i].tmp==2)
 	{

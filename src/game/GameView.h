@@ -12,6 +12,7 @@
 #include "interface/Button.h"
 #include "interface/Slider.h"
 #include "ToolButton.h"
+#include "RenderPreset.h"
 #include "Brush.h"
 
 using namespace std;
@@ -23,7 +24,7 @@ enum DrawMode
 
 enum SelectMode
 {
-	SelectNone, SelectStamp, SelectCopy, PlaceClipboard, PlaceStamp
+	SelectNone, SelectStamp, SelectCopy, PlaceSave
 };
 
 class GameController;
@@ -35,7 +36,14 @@ private:
 	bool isMouseDown;
 	bool zoomEnabled;
 	bool zoomCursorFixed;
+	bool drawSnap;
 	int toolIndex;
+
+	int infoTipPresence;
+	std::string toolTip;
+	ui::Point toolTipPosition;
+	std::string infoTip;
+
 	queue<ui::Point*> pointQueue;
 	GameController * c;
 	Renderer * ren;
@@ -43,8 +51,10 @@ private:
 	//UI Elements
 	vector<ui::Button*> menuButtons;
 	vector<ToolButton*> toolButtons;
+	vector<ui::Component*> notificationComponents;
 	deque<string> logEntries;
 	float lastLogEntry;
+	ui::Button * scrollBar;
 	ui::Button * searchButton;
     ui::Button * reloadButton;
     ui::Button * saveSimulationButton;
@@ -73,12 +83,17 @@ private:
 
 	ui::Point mousePosition;
 
-	Thumbnail * clipboardThumb;
-	Thumbnail * stampThumb;
+	RenderPreset * renderModePresets;
+
+	Thumbnail * placeSaveThumb;
 
 	Particle sample;
 
+	int lastOffset;
+	void setToolButtonOffset(int offset);
 	void changeColour();
+	virtual ui::Point lineSnapCoords(ui::Point point1, ui::Point point2);
+	virtual ui::Point rectSnapCoords(ui::Point point1, ui::Point point2);
 public:
     GameView();
 
@@ -99,9 +114,14 @@ public:
 	void NotifyZoomChanged(GameModel * sender);
 	void NotifyColourSelectorVisibilityChanged(GameModel * sender);
 	void NotifyColourSelectorColourChanged(GameModel * sender);
-	void NotifyClipboardChanged(GameModel * sender);
-	void NotifyStampChanged(GameModel * sender);
+	void NotifyPlaceSaveChanged(GameModel * sender);
+	void NotifyNotificationsChanged(GameModel * sender);
 	void NotifyLogChanged(GameModel * sender, string entry);
+	void NotifyToolTipChanged(GameModel * sender);
+	void NotifyInfoTipChanged(GameModel * sender);
+
+	virtual void ToolTip(ui::Component * sender, ui::Point mousePosition, std::string toolTip);
+
 	virtual void OnMouseMove(int x, int y, int dx, int dy);
 	virtual void OnMouseDown(int x, int y, unsigned button);
 	virtual void OnMouseUp(int x, int y, unsigned button);

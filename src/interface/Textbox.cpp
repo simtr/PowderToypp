@@ -8,6 +8,247 @@
 
 using namespace ui;
 
+Textbox::Textbox(Point position, Point size, std::string textboxText, std::string textboxPlaceholder):
+	Label(position, size, ""),
+	actionCallback(NULL),
+	masked(false),
+	border(true),
+	mouseDown(false)
+{
+	placeHolder = textboxPlaceholder;
+
+	SetText(textboxText);
+	cursor = text.length();
+}
+
+Textbox::~Textbox()
+{
+	if(actionCallback)
+		delete actionCallback;
+}
+
+void Textbox::SetPlaceholder(std::string text)
+{
+	placeHolder = text;
+}
+
+void Textbox::SetText(std::string newText)
+{
+	backingText = newText;
+
+	if(masked)
+	{
+		std::string maskedText = std::string(newText);
+		std::fill(maskedText.begin(), maskedText.end(), '\x8D');
+		Label::SetText(maskedText);
+	}
+	else
+		Label::SetText(newText);
+
+	if(cursor)
+	{
+		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+	}
+	else
+	{
+		cursorPositionY = cursorPositionX = 0;
+	}
+}
+
+void Textbox::SetDisplayText(std::string newText)
+{
+	Label::SetText(text);
+}
+
+std::string Textbox::GetText()
+{
+	return backingText;
+}
+
+void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
+{
+	bool changed = false;
+	try
+	{
+		switch(key)
+		{
+		case KEY_HOME:
+			cursor = 0;
+			break;
+		case KEY_END:
+			cursor = backingText.length();
+			break;
+		case KEY_LEFT:
+			if(cursor > 0)
+				cursor--;
+			break;
+		case KEY_RIGHT:
+			if(cursor < backingText.length())
+				cursor++;
+			break;
+		case KEY_DELETE:
+			if(HasSelection())
+			{
+				if(getLowerSelectionBound() < 0 || getHigherSelectionBound() > backingText.length())
+					return;
+				backingText.erase(backingText.begin()+getLowerSelectionBound(), backingText.begin()+getHigherSelectionBound());
+				cursor = getLowerSelectionBound();
+				changed = true;
+			}
+			else if(backingText.length() && cursor < backingText.length())
+			{
+				if(ctrl)
+					backingText.erase(cursor, backingText.length()-cursor);
+				else
+					backingText.erase(cursor, 1);
+				changed = true;
+			}
+			break;
+		case KEY_BACKSPACE:
+			if(HasSelection())
+			{
+				if(getLowerSelectionBound() < 0 || getHigherSelectionBound() > backingText.length())
+					return;
+				backingText.erase(backingText.begin()+getLowerSelectionBound(), backingText.begin()+getHigherSelectionBound());
+				cursor = getLowerSelectionBound();
+				changed = true;
+			}
+			else if(backingText.length() && cursor > 0)
+			{
+				if(ctrl)
+				{
+					backingText.erase(0, cursor);
+					cursor = 0;
+				}
+				else
+				{
+					backingText.erase(cursor-1, 1);
+					cursor--;
+				}
+				changed = true;
+			}
+			break;
+		}
+		if(character >= ' ' && character < 127)
+		{
+			if(HasSelection())
+			{
+				if(getLowerSelectionBound() < 0 || getHigherSelectionBound() > backingText.length())
+					return;
+				backingText.erase(backingText.begin()+getLowerSelectionBound(), backingText.begin()+getHigherSelectionBound());
+				cursor = getLowerSelectionBound();
+			}
+
+			if(cursor == backingText.length())
+			{
+				backingText += character;
+			}
+			else
+			{
+				backingText.insert(cursor, 1, (char)character);
+			}
+			cursor++;
+			changed = true;
+		}
+		ClearSelection();
+	}
+	catch(std::out_of_range &e)
+	{
+		cursor = 0;
+		backingText = "";
+	}
+	if(changed)
+	{
+		if(masked)
+		{
+			std::string maskedText = std::string(backingText);
+			std::fill(maskedText.begin(), maskedText.end(), '\x8D');
+			Label::SetText(maskedText);
+		}
+		else
+		{
+			text = backingText;
+		}
+		if(actionCallback)
+			actionCallback->TextChangedCallback(this);
+	}
+
+	if(multiline)
+		updateMultiline();
+	updateSelection();
+	TextPosition(text);
+
+	if(cursor)
+	{
+		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+	}
+	else
+	{
+		cursorPositionY = cursorPositionX = 0;
+	}
+}
+
+void Textbox::OnMouseClick(int x, int y, unsigned button)
+{
+	mouseDown = true;
+	cursor = Graphics::CharIndexAtPosition(multiline?((char*)textLines.c_str()):((char*)text.c_str()), x-textPosition.X, y-textPosition.Y);
+	if(cursor)
+	{
+		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+	}
+	else
+	{
+		cursorPositionY = cursorPositionX = 0;
+	}
+	Label::OnMouseClick(x, y, button);
+}
+
+void Textbox::OnMouseUp(int x, int y, unsigned button)
+{
+	mouseDown = false;
+	Label::OnMouseUp(x, y, button);
+}
+
+void Textbox::OnMouseMoved(int localx, int localy, int dx, int dy)
+{
+	if(mouseDown)
+	{
+		cursor = Graphics::CharIndexAtPosition(multiline?((char*)textLines.c_str()):((char*)text.c_str()), localx-textPosition.X, localy-textPosition.Y);
+		if(cursor)
+		{
+			Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+		}
+		else
+		{
+			cursorPositionY = cursorPositionX = 0;
+		}
+	}
+	Label::OnMouseMoved(localx, localy, dx, dy);
+}
+
+void Textbox::Draw(const Point& screenPos)
+{
+	Label::Draw(screenPos);
+
+	Graphics * g = Engine::Ref().g;
+	if(IsFocused())
+	{
+		if(border) g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 255, 255, 255, 255);
+		g->draw_line(screenPos.X+textPosition.X+cursorPositionX+1, screenPos.Y-2+textPosition.Y+cursorPositionY, screenPos.X+textPosition.X+cursorPositionX+1, screenPos.Y+10+textPosition.Y+cursorPositionY, 255, 255, 255, XRES+BARSIZE);
+	}
+	else
+	{
+		if(!text.length())
+		{
+			g->drawtext(screenPos.X+textPosition.X, screenPos.Y+textPosition.Y, placeHolder, textColour.Red, textColour.Green, textColour.Blue, 170);
+		}
+		if(border) g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 160, 160, 160, 255);
+	}
+	if(Appearance.icon)
+		g->draw_icon(screenPos.X+iconPosition.X, screenPos.Y+iconPosition.Y, Appearance.icon);
+}
+
+/*
 Textbox::Textbox(Point position, Point size, std::string textboxText):
 	Component(position, size),
 	text(textboxText),
@@ -129,10 +370,11 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 	{
 		if(masked)
 		{
-			char tempText[text.length()];
-			memset(tempText, 0x8d, text.length());
+			char * tempText = new char[text.length()+1];
+			std::fill(tempText, tempText+text.length(), 0x8d);
 			tempText[text.length()] = 0;
-			displayText = tempText;
+			displayText = std::string(tempText);
+			delete tempText;
 		}
 		else
 		{
@@ -164,4 +406,4 @@ void Textbox::Draw(const Point& screenPos)
 	g->drawtext(screenPos.X+textPosition.X, screenPos.Y+textPosition.Y, displayText, 255, 255, 255, 255);
 	if(Appearance.icon)
 		g->draw_icon(screenPos.X+iconPosition.X, screenPos.Y+iconPosition.Y, Appearance.icon);
-}
+}*/

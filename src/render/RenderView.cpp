@@ -6,8 +6,8 @@
  */
 
 #include "simulation/ElementGraphics.h"
-#include "Graphics.h"
-#include "Renderer.h"
+#include "graphics/Graphics.h"
+#include "graphics/Renderer.h"
 #include "RenderView.h"
 
 class RenderView::RenderModeAction: public ui::CheckboxAction
@@ -240,13 +240,8 @@ void RenderView::OnDraw()
 	if(ren)
 	{
 		ren->clearScreen(1.0f);
-		ren->draw_air();
-		ren->render_parts();
-		ren->render_fire();
-		ren->draw_grav();
-		ren->DrawWalls();
-		ren->DrawSigns();
-		ren->FinaliseParts();
+		ren->RenderBegin();
+		ren->RenderEnd();
 	}
 	g->draw_line(0, YRES, XRES-1, YRES, 255, 255, 255, XRES+BARSIZE);
 	g->draw_line(180, YRES, 180, YRES+MENUSIZE, 200, 200, 200, XRES+BARSIZE);

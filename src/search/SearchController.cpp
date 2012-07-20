@@ -89,6 +89,7 @@ SearchController::~SearchController()
 		ui::Engine::Ref().CloseWindow();
 	}
 	delete searchModel;
+	delete searchView;
 }
 
 void SearchController::DoSearch(std::string query)
@@ -197,7 +198,7 @@ void SearchController::removeSelectedC()
 		std::vector<int> saves;
 	public:
 		RemoveSavesTask(std::vector<int> saves_) { saves = saves_; }
-		virtual void doWork()
+		virtual bool doWork()
 		{
 			for(int i = 0; i < saves.size(); i++)
 			{
@@ -214,6 +215,7 @@ void SearchController::removeSelectedC()
 				usleep(100*1000);
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
+			return true;
 		}
 	};
 
@@ -250,7 +252,7 @@ void SearchController::unpublishSelectedC()
 		std::vector<int> saves;
 	public:
 		UnpublishSavesTask(std::vector<int> saves_) { saves = saves_; }
-		virtual void doWork()
+		virtual bool doWork()
 		{
 			for(int i = 0; i < saves.size(); i++)
 			{
@@ -267,6 +269,7 @@ void SearchController::unpublishSelectedC()
 				usleep(100*1000);
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
+			return true;
 		}
 	};
 
@@ -283,7 +286,7 @@ void SearchController::FavouriteSelected()
 		std::vector<int> saves;
 	public:
 		FavouriteSavesTask(std::vector<int> saves_) { saves = saves_; }
-		virtual void doWork()
+		virtual bool doWork()
 		{
 			for(int i = 0; i < saves.size(); i++)
 			{
@@ -300,6 +303,7 @@ void SearchController::FavouriteSelected()
 				usleep(100*1000);
 				notifyProgress((float(i+1)/float(saves.size())*100));
 			}
+			return true;
 		}
 	};
 

@@ -34,7 +34,7 @@ class GameSave
 {
 public:
 	
-	int width, height;
+	int blockWidth, blockHeight;
 
 	//Simulation data
 	//int ** particleMap;
@@ -70,12 +70,14 @@ public:
 		{
 			particles[particlesCount++] = v;
 		}
+		return *this;
 	}
 	
 	inline GameSave& operator << (sign v)
 	{
 		if(signs.size()<MAXSIGNS && v.text.length())
 			signs.push_back(v);
+		return *this;
 	}
 		
 private:

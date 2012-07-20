@@ -3,6 +3,7 @@
 
 #include <queue>
 #include <vector>
+#include <list>
 #include <fstream>
 
 #include "Config.h"
@@ -26,11 +27,30 @@ enum RequestStatus {
 	RequestOkay, RequestFailure
 };
 
+class UpdateInfo
+{
+public:
+	enum BuildType { Stable, Beta, Snapshot };
+	std::string File;
+	int Major;
+	int Minor;
+	int Build;
+	BuildType Type;
+	UpdateInfo() : Major(0), Minor(0), Build(0), File(""), Type(Stable) {}
+	UpdateInfo(int major, int minor, int build, std::string file, BuildType type) : Major(major), Minor(minor), Build(build), File(file), Type(type) {}
+};
+
+class ClientListener;
 class Client: public Singleton<Client> {
 private:
+	void * versionCheckRequest;
+	bool updateAvailable;
+	UpdateInfo updateInfo;
+
+
 	std::string lastError;
 
-	vector<string> stampIDs;
+	list<string> stampIDs;
 	int lastStampTime;
 	int lastStampName;
 
@@ -45,12 +65,22 @@ private:
 	int activeThumbRequestCompleteTimes[IMGCONNS];
 	std::string activeThumbRequestIDs[IMGCONNS];
 	void updateStamps();
-public:
+	static vector<std::string> explodePropertyString(std::string property);
+	void notifyUpdateAvailable();
+	void notifyAuthUserChanged();
+
 	//Config file handle
 	json::Object configDocument;
+public:
+	vector<ClientListener*> listeners;
+
+	UpdateInfo GetUpdateInfo();
 
 	Client();
 	~Client();
+
+	void AddListener(ClientListener * listener);
+	void RemoveListener(ClientListener * listener);
 
 	RequestStatus ExecVote(int saveID, int direction);
 	RequestStatus UploadSave(SaveInfo * save);
@@ -58,7 +88,11 @@ public:
 	SaveFile * GetStamp(string stampID);
 	void DeleteStamp(string stampID);
 	string AddStamp(GameSave * saveData);
-	vector<string> GetStamps();
+	vector<string> GetStamps(int start, int count);
+	int GetStampsCount();
+	SaveFile * GetFirstStamp();
+
+	RequestStatus AddComment(int saveID, std::string comment);
 
 	unsigned char * GetSaveData(int saveID, int saveDate, int & dataLength);
 	LoginStatus Login(string username, string password, User & user);
@@ -79,6 +113,26 @@ public:
 	std::string GetLastError() {
 		return lastError;
 	}
+	void Tick();
+	void Shutdown();
+
+	std::string GetPrefString(std::string property, std::string defaultValue);
+	double GetPrefNumber(std::string property, double defaultValue);
+	vector<string> GetPrefStringArray(std::string property);
+	vector<double> GetPrefNumberArray(std::string property);
+	vector<bool> GetPrefBoolArray(std::string property);
+	bool GetPrefBool(std::string property, bool defaultValue);
+
+	void SetPref(std::string property, std::string value);
+	void SetPref(std::string property, double value);
+	void SetPref(std::string property, vector<string> value);
+	void SetPref(std::string property, vector<double> value);
+	void SetPref(std::string property, vector<bool> value);
+	void SetPref(std::string property, bool value);
+
+	json::UnknownElement GetPref(std::string property);
+	void setPrefR(std::deque<string> tokens, json::UnknownElement & element, json::UnknownElement & value);
+	void SetPref(std::string property, json::UnknownElement & value);
 };
 
 #endif // CLIENT_H
