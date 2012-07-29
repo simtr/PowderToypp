@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <deque>
 
-#ifdef WIN32
+#ifdef WIN
 #include <direct.h>
 #else
 #include <sys/stat.h>
@@ -28,7 +28,7 @@
 
 extern "C"
 {
-#if defined(WIN32) && !defined(__GNUC__)
+#if defined(WIN) && !defined(__GNUC__)
 #include <io.h>
 #else
 #include <dirent.h>
@@ -134,7 +134,7 @@ std::vector<std::string> Client::DirectorySearch(std::string directory, std::str
 {
 	//Get full file listing
 	std::vector<std::string> directoryList;
-#if defined(WIN32) && !defined(__GNUC__)
+#if defined(WIN) && !defined(__GNUC__)
 	//Windows
 	struct _finddata_t currentFile;
 	intptr_t findFileHandle;
@@ -527,7 +527,7 @@ string Client::AddStamp(GameSave * saveData)
 	<< std::setw(8) << std::setfill('0') << std::hex << lastStampTime
 	<< std::setw(2) << std::setfill('0') << std::hex << lastStampName;
 
-#ifdef WIN32
+#ifdef WIN
 	_mkdir(STAMPS_DIR);
 #else
 	mkdir(STAMPS_DIR, 0755);
@@ -551,7 +551,7 @@ string Client::AddStamp(GameSave * saveData)
 void Client::updateStamps()
 {
 
-#ifdef WIN32
+#ifdef WIN
 	_mkdir(STAMPS_DIR);
 #else
 	mkdir(STAMPS_DIR, 0755);
