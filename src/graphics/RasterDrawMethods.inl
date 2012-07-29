@@ -19,6 +19,9 @@ int PIXELMETHODS_CLASS::drawtext(int x, int y, const char *s, int r, int g, int 
 		else if (*s == '\x0F')
 		{
 			if(!s[1] || !s[2] || !s[3]) break;
+			oR = r;
+			oG = g;
+			oB = b;
 			r = s[1];
 			g = s[2];
 			b = s[3];
@@ -327,7 +330,8 @@ void PIXELMETHODS_CLASS::draw_image(pixel *img, int x, int y, int w, int h, int 
 {
 	int i, j, r, g, b;
 	if (!img) return;
-	if(y + h > VIDYRES) h = (VIDYRES)-y; //Adjust height to prevent drawing off the bottom
+	if(y + h > VIDYRES) h = ((VIDYRES)-y)-1; //Adjust height to prevent drawing off the bottom
+	if(!h || y < 0) return;
 	if(a >= 255)
 		for (j=0; j<h; j++)
 			for (i=0; i<w; i++)

@@ -35,9 +35,11 @@ public:
 	int Major;
 	int Minor;
 	int Build;
+	int Time;
 	BuildType Type;
-	UpdateInfo() : Major(0), Minor(0), Build(0), File(""), Type(Stable) {}
-	UpdateInfo(int major, int minor, int build, std::string file, BuildType type) : Major(major), Minor(minor), Build(build), File(file), Type(type) {}
+	UpdateInfo() : Major(0), Minor(0), Build(0), Time(0), File(""), Type(Stable) {}
+	UpdateInfo(int major, int minor, int build, std::string file, BuildType type) : Major(major), Minor(minor), Build(build), Time(0), File(file), Type(type) {}
+	UpdateInfo(int time, std::string file, BuildType type) : Major(0), Minor(0), Build(0), Time(time), File(file), Type(type) {}
 };
 
 class ClientListener;
@@ -79,6 +81,11 @@ public:
 	Client();
 	~Client();
 
+	std::vector<std::string> DirectorySearch(std::string directory, std::string search, std::vector<std::string> extensions);
+	std::vector<std::string> DirectorySearch(std::string directory, std::string search, std::string extension);
+
+	std::vector<unsigned char> ReadFile(std::string filename);
+
 	void AddListener(ClientListener * listener);
 	void RemoveListener(ClientListener * listener);
 
@@ -118,15 +125,19 @@ public:
 
 	std::string GetPrefString(std::string property, std::string defaultValue);
 	double GetPrefNumber(std::string property, double defaultValue);
+	int GetPrefInteger(std::string property, int defaultValue);
 	vector<string> GetPrefStringArray(std::string property);
 	vector<double> GetPrefNumberArray(std::string property);
+	vector<int> GetPrefIntegerArray(std::string property);
 	vector<bool> GetPrefBoolArray(std::string property);
 	bool GetPrefBool(std::string property, bool defaultValue);
 
 	void SetPref(std::string property, std::string value);
 	void SetPref(std::string property, double value);
+	void SetPref(std::string property, int value);
 	void SetPref(std::string property, vector<string> value);
 	void SetPref(std::string property, vector<double> value);
+	void SetPref(std::string property, vector<int> value);
 	void SetPref(std::string property, vector<bool> value);
 	void SetPref(std::string property, bool value);
 

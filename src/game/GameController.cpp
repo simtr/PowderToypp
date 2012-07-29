@@ -16,6 +16,7 @@
 #include "elementsearch/ElementSearchActivity.h"
 #include "update/UpdateActivity.h"
 #include "Notification.h"
+#include "filebrowser/FileBrowserActivity.h"
 
 using namespace std;
 
@@ -184,9 +185,13 @@ void GameController::PlaceSave(ui::Point position)
 	}
 }
 
-void GameController::AdjustBrushSize(int direction, bool logarithmic)
+void GameController::AdjustBrushSize(int direction, bool logarithmic, bool xAxis, bool yAxis)
 {
+	if(xAxis && yAxis)
+		return;
+
 	ui::Point newSize(0, 0);
+	ui::Point oldSize = gameModel->GetBrush()->GetRadius();
 	if(logarithmic)
 		newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction * ((gameModel->GetBrush()->GetRadius().X/10)>0?gameModel->GetBrush()->GetRadius().X/10:1), direction * ((gameModel->GetBrush()->GetRadius().Y/10)>0?gameModel->GetBrush()->GetRadius().Y/10:1));
 	else
@@ -195,7 +200,15 @@ void GameController::AdjustBrushSize(int direction, bool logarithmic)
 			newSize.X = 0;
 	if(newSize.Y<0)
 			newSize.Y = 0;
-	gameModel->GetBrush()->SetRadius(newSize);
+
+	if(xAxis)
+		gameModel->GetBrush()->SetRadius(ui::Point(newSize.X, oldSize.Y));
+	else if(yAxis)
+		gameModel->GetBrush()->SetRadius(ui::Point(oldSize.X, newSize.Y));
+	else
+		gameModel->GetBrush()->SetRadius(newSize);
+
+	BrushChanged(gameModel->GetBrushID(), gameModel->GetBrush()->GetRadius().X, gameModel->GetBrush()->GetRadius().Y);
 }
 
 void GameController::AdjustZoomSize(int direction, bool logarithmic)
@@ -295,7 +308,7 @@ void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueu
 			pointQueue.pop();
 			if(!first)
 			{
-				activeTool->DrawLine(sim, cBrush, fPoint, sPoint);
+				activeTool->DrawLine(sim, cBrush, sPoint, fPoint, true);
 			}
 			else
 			{
@@ -363,6 +376,11 @@ void GameController::CopyRegion(ui::Point point1, ui::Point point2)
 bool GameController::MouseMove(int x, int y, int dx, int dy)
 {
 	return commandInterface->OnMouseMove(x, y, dx, dy);
+}
+
+bool GameController::BrushChanged(int brushType, int rx, int ry)
+{
+	return commandInterface->OnBrushChanged(brushType, rx, ry);
 }
 
 bool GameController::MouseDown(int x, int y, unsigned button)
@@ -517,6 +535,32 @@ void GameController::OpenSearch()
 	ui::Engine::Ref().ShowWindow(search->GetView());
 }
 
+void GameController::OpenLocalSaveWindow()
+{
+
+}
+
+void GameController::LoadSaveFile(SaveFile * file)
+{
+	gameModel->SetSaveFile(file);
+}
+
+void GameController::OpenLocalBrowse()
+{
+	class LocalSaveOpenCallback: public FileSelectedCallback
+	{
+		GameController * c;
+	public:
+		LocalSaveOpenCallback(GameController * _c): c(_c) {}
+		virtual  ~LocalSaveOpenCallback() {};
+		virtual void FileSelected(SaveFile* file)
+		{
+			c->LoadSaveFile(file);
+		}
+	};
+	new FileBrowserActivity(LOCAL_SAVE_DIR PATH_SEP, new LocalSaveOpenCallback(this));
+}
+
 void GameController::OpenLogin()
 {
 	loginWindow = new LoginController(new LoginCallback(this));
@@ -638,6 +682,7 @@ void GameController::Vote(int direction)
 void GameController::ChangeBrush()
 {
 	gameModel->SetBrush(gameModel->GetBrushID()+1);
+	BrushChanged(gameModel->GetBrushID(), gameModel->GetBrush()->GetRadius().X, gameModel->GetBrush()->GetRadius().Y);
 }
 
 void GameController::ClearSim()

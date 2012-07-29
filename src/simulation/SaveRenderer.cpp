@@ -41,7 +41,9 @@ Thumbnail * SaveRenderer::Render(GameSave * save)
 	Thumbnail * tempThumb;
 	width = save->blockWidth;
 	height = save->blockHeight;
+	bool doCollapse = save->Collapsed();
 	
+	g->Acquire();
 	g->Clear();
 	sim->clear_sim();
 	
@@ -69,7 +71,7 @@ Thumbnail * SaveRenderer::Render(GameSave * save)
 
 		pData = new pixel[XRES*YRES];
 		texData = new unsigned char[(XRES*YRES)*PIXELSIZE];
-		std::fill(texData, texData+(XRES*YRES), 0xDD);
+		std::fill(texData, texData+(XRES*YRES)*PIXELSIZE, 0xDD);
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData);
 		glDisable(GL_TEXTURE_2D);
 
@@ -111,6 +113,9 @@ Thumbnail * SaveRenderer::Render(GameSave * save)
 			free(pData);
 #endif
 	}
+	if(doCollapse)
+		save->Collapse();
+	g->Release();
 	return tempThumb;
 }
 

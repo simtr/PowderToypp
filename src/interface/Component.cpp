@@ -18,7 +18,8 @@ Component::Component(Window* parent_state):
 	textPosition(0, 0),
 	textSize(0, 0),
 	iconPosition(0, 0),
-	drawn(false)
+	drawn(false),
+	menu(NULL)
 {
 
 }
@@ -33,7 +34,8 @@ Component::Component(Point position, Point size):
 	textPosition(0, 0),
 	textSize(0, 0),
 	iconPosition(0, 0),
-	drawn(false)
+	drawn(false),
+	menu(NULL)
 {
 
 }
@@ -48,7 +50,8 @@ Component::Component():
 	textPosition(0, 0),
 	textSize(0, 0),
 	iconPosition(0, 0),
-	drawn(false)
+	drawn(false),
+	menu(NULL)
 {
 
 }
@@ -103,7 +106,7 @@ void Component::TextPosition(std::string displayText)
 	}
 	if(Appearance.icon)
 	{
-		iconPosition = textPosition;//-ui::Point(0, 1);
+		iconPosition = textPosition-ui::Point(0, 1);
 		textPosition.X += 15;
 	}
 }
@@ -153,6 +156,11 @@ void Component::SetParent(Panel* new_parent)
 
 // ***** OVERRIDEABLES *****
 // Kept empty.
+
+void Component::OnContextMenuAction(int item)
+{
+
+}
 
 void Component::Draw(const Point& screenPos)
 {
@@ -217,5 +225,6 @@ void Component::OnMouseWheelInside(int localx, int localy, int d)
 
 Component::~Component()
 {
-
+	if(menu)
+		delete menu;
 }

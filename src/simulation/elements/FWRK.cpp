@@ -50,50 +50,66 @@ Element_FWRK::Element_FWRK()
 int Element_FWRK::update(UPDATE_FUNC_ARGS)
  {
 	int r, rx, ry, np;
-	if ((parts[i].temp>400&&(9+parts[i].temp/40)>rand()%100000&&parts[i].life==0&&!pmap[y-1][x])||parts[i].ctype==PT_DUST)
+	if (parts[i].life==0 && ((parts[i].temp>400&&(9+parts[i].temp/40)>rand()%100000&&surround_space)||parts[i].ctype==PT_DUST))
 	{
-		np = sim->create_part(-1, x , y-1 , PT_FWRK);
-		if (np!=-1)
+		float gx, gy, multiplier, gmax;
+		int randTmp;
+		sim->GetGravityField(x, y, sim->elements[PT_FWRK].Gravity, 1.0f, gx, gy);
+		if (gx*gx+gy*gy < 0.001f)
 		{
-			parts[np].vy = rand()%8-22;
-			parts[np].vx = rand()%20-rand()%20;
-			parts[np].life=rand()%15+25;
-			parts[np].dcolour = parts[i].dcolour;
-			sim->kill_part(i);
-			return 1;
+			float angle = (rand()%6284)*0.001f;//(in radians, between 0 and 2*pi)
+			gx += sinf(angle)*sim->elements[PT_FWRK].Gravity*0.5f;
+			gy += cosf(angle)*sim->elements[PT_FWRK].Gravity*0.5f;
+		}
+		gmax = fmaxf(fabsf(gx), fabsf(gy));
+		if (sim->eval_move(PT_FWRK, (int)(x-(gx/gmax)+0.5f), (int)(y-(gy/gmax)+0.5f), NULL))
+		{
+			multiplier = 15.0f/sqrtf(gx*gx+gy*gy);
+
+			//Some variation in speed parallel to gravity direction
+			randTmp = (rand()%200)-100;
+			gx += gx*randTmp*0.002f;
+			gy += gy*randTmp*0.002f;
+			//and a bit more variation in speed perpendicular to gravity direction
+			randTmp = (rand()%200)-100;
+			gx += -gy*randTmp*0.005f;
+			gy += gx*randTmp*0.005f;
+
+			parts[i].life=rand()%10+18;
+			parts[i].ctype=0;
+			parts[i].vx -= gx*multiplier;
+			parts[i].vy -= gy*multiplier;
+			parts[i].dcolour = parts[i].dcolour;
+			return 0;
 		}
 	}
 	if (parts[i].life>=45)
 		parts[i].life=0;
-	if ((parts[i].life<3&&parts[i].life>0)||(parts[i].vy>6&&parts[i].life>0))
+	if (parts[i].life<3&&parts[i].life>0)
 	{
-		int q = (rand()%255+1);
-		int w = (rand()%255+1);
-		int e = (rand()%255+1);
-		for (rx=-1; rx<2; rx++)
-			for (ry=-2; ry<3; ry++)
-				if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
-				{
-					if (5>=rand()%8)
-					{
-						if (!pmap[y+ry][x+rx])
-						{
-							np = sim->create_part(-1, x+rx, y+ry , PT_DUST);
-							sim->pv[y/CELL][x/CELL] += 2.00f*CFDS;
-							if (np!=-1)
-							{
-								parts[np].vy = -(rand()%10-1);
-								parts[np].vx = ((rand()%2)*2-1)*rand()%(5+5)+(parts[i].vx)*2 ;
-								parts[np].life= rand()%37+18;
-								parts[np].tmp=q;
-								parts[np].tmp2=w;
-								parts[np].ctype=e;
-								parts[np].temp= rand()%20+6000;
-								parts[np].dcolour = parts[i].dcolour;
-							}
-						}
-					}
-				}
+		int r = (rand()%245+11);
+		int g = (rand()%245+11);
+		int b = (rand()%245+11);
+		int n;
+		float angle, magnitude;
+		unsigned col = (r<<16) | (g<<8) | b;
+		for (n=0; n<40; n++)
+		{
+			np = sim->create_part(-3, x, y, PT_EMBR);
+			if (np>-1)
+			{
+				magnitude = ((rand()%60)+40)*0.05f;
+				angle = (rand()%6284)*0.001f;//(in radians, between 0 and 2*pi)
+				parts[np].vx = parts[i].vx*0.5f + cosf(angle)*magnitude;
+				parts[np].vy = parts[i].vy*0.5f + sinf(angle)*magnitude;
+				parts[np].ctype = col;
+				parts[np].tmp = 1;
+				parts[np].life = rand()%40+70;
+				parts[np].temp = (rand()%500)+5750.0f;
+				parts[np].dcolour = parts[i].dcolour;
+			}
+		}
+		sim->pv[y/CELL][x/CELL] += 8.0f;
 		sim->kill_part(i);
 		return 1;
 	}

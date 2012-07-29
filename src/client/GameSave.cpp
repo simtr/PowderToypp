@@ -7,11 +7,16 @@
 //
 
 #include <iostream>
+#include <sstream>
 #include <bzlib.h>
 #include "Config.h"
 #include "bson/BSON.h"
 #include "GameSave.h"
 #include "simulation/SimulationData.h"
+extern "C"
+{
+	#include "hmap.h"
+}
 
 GameSave::GameSave(GameSave & save) :
 waterEEnabled(save.waterEEnabled),
@@ -20,7 +25,10 @@ gravityEnable(save.gravityEnable),
 paused(save.paused),
 gravityMode(save.gravityMode),
 airMode(save.airMode),
-signs(save.signs)
+signs(save.signs),
+expanded(save.expanded),
+hasOriginalData(save.hasOriginalData),
+originalData(save.originalData)
 {
 	blockMap = NULL;
 	blockMapPtr = NULL;
@@ -29,14 +37,21 @@ signs(save.signs)
 	fanVelY = NULL;
 	fanVelYPtr = NULL;
 	particles = NULL;
+	if(save.expanded)
+	{
+		setSize(save.blockWidth, save.blockHeight);
 
-	setSize(save.blockWidth, save.blockHeight);
-
+		copy(save.particles, save.particles+NPART, particles);
+		copy(save.blockMapPtr, save.blockMapPtr+(blockHeight*blockWidth), blockMapPtr);
+		copy(save.fanVelXPtr, save.fanVelXPtr+(blockHeight*blockWidth), fanVelXPtr);
+		copy(save.fanVelYPtr, save.fanVelYPtr+(blockHeight*blockWidth), fanVelYPtr);
+	}
+	else
+	{
+		blockWidth = save.blockWidth;
+		blockHeight = save.blockHeight;
+	}
 	particlesCount = save.particlesCount;
-	copy(save.particles, save.particles+NPART, particles);
-	copy(save.blockMapPtr, save.blockMapPtr+(blockHeight*blockWidth), blockMapPtr);
-	copy(save.fanVelXPtr, save.fanVelXPtr+(blockHeight*blockWidth), fanVelXPtr);
-	copy(save.fanVelYPtr, save.fanVelYPtr+(blockHeight*blockWidth), fanVelYPtr);
 }
 
 GameSave::GameSave(int width, int height)
@@ -49,7 +64,73 @@ GameSave::GameSave(int width, int height)
 	fanVelYPtr = NULL;
 	particles = NULL;
 
+	hasOriginalData = false;
+	expanded = true;
 	setSize(width, height);
+}
+
+GameSave::GameSave(std::vector<char> data)
+{
+	blockWidth = 0;
+	blockHeight = 0;
+
+	blockMap = NULL;
+	blockMapPtr = NULL;
+	fanVelX = NULL;
+	fanVelXPtr = NULL;
+	fanVelY = NULL;
+	fanVelYPtr = NULL;
+	particles = NULL;
+
+	expanded = false;
+	hasOriginalData = true;
+	originalData = data;
+#ifdef DEBUG
+	std::cout << "Creating Collapsed save from data" << std::endl;
+#endif
+	try
+	{
+		Expand();
+	}
+	catch(ParseException & e)
+	{
+		std::cout << e.what() << std::endl;
+		this->~GameSave();	//Free any allocated memory
+		throw;
+	}
+	Collapse();
+}
+
+GameSave::GameSave(std::vector<unsigned char> data)
+{
+	blockWidth = 0;
+	blockHeight = 0;
+
+	blockMap = NULL;
+	blockMapPtr = NULL;
+	fanVelX = NULL;
+	fanVelXPtr = NULL;
+	fanVelY = NULL;
+	fanVelYPtr = NULL;
+	particles = NULL;
+
+	expanded = false;
+	hasOriginalData = true;
+	originalData = std::vector<char>(data.begin(), data.end());
+#ifdef DEBUG
+	std::cout << "Creating Collapsed save from data" << std::endl;
+#endif
+	try
+	{
+		Expand();
+	}
+	catch(ParseException & e)
+	{
+		std::cout << e.what() << std::endl;
+		this->~GameSave();	//Free any allocated memory
+		throw;
+	}
+	Collapse();
 }
 
 GameSave::GameSave(char * data, int dataSize)
@@ -65,31 +146,109 @@ GameSave::GameSave(char * data, int dataSize)
 	fanVelYPtr = NULL;
 	particles = NULL;
 
-	try {
-		if(dataSize > 0)
-		{
-			if(data[0] == 0x50 || data[0] == 0x66)
-			{
-				readPSv(data, dataSize);
-			}
-			else if(data[0] == 'O')
-			{
-				readOPS(data, dataSize);
-			}
-			else
-			{
-				std::cerr << "Got Magic number '" << data[0] << "'" << std::endl;
-				throw ParseException(ParseException::Corrupt, "Invalid save format");
-			}
-		}
-		else
-		{
-			throw ParseException(ParseException::Corrupt, "No data");
-		}
-	} catch (ParseException& e) {
+	expanded = false;
+	hasOriginalData = true;
+	originalData = std::vector<char>(data, data+dataSize);
+#ifdef DEBUG
+	std::cout << "Creating Expanded save from data" << std::endl;
+#endif
+	try
+	{
+		Expand();
+	}
+	catch(ParseException & e)
+	{
 		std::cout << e.what() << std::endl;
 		this->~GameSave();	//Free any allocated memory
 		throw;
+	}
+	//Collapse();
+}
+
+bool GameSave::Collapsed()
+{
+	return !expanded;
+}
+
+void GameSave::Expand()
+{
+	if(hasOriginalData && !expanded)
+	{
+		expanded = true;
+		read(&originalData[0], originalData.size());
+	}
+}
+
+void GameSave::Collapse()
+{
+	if(expanded && hasOriginalData)
+	{
+		expanded = false;
+		if(particles)
+		{
+			delete[] particles;
+			particles = NULL;
+		}
+		if(blockMap)
+		{
+			delete[] blockMap;
+			blockMap = NULL;
+		}
+		if(blockMapPtr)
+		{
+			delete[] blockMapPtr;
+			blockMapPtr = NULL;
+		}
+		if(fanVelX)
+		{
+			delete[] fanVelX;
+			fanVelX = NULL;
+		}
+		if(fanVelXPtr)
+		{
+			delete[] fanVelXPtr;
+			fanVelXPtr = NULL;
+		}
+		if(fanVelY)
+		{
+			delete[] fanVelY;
+			fanVelY = NULL;
+		}
+		if(fanVelYPtr)
+		{
+			delete[] fanVelYPtr;
+			fanVelYPtr = NULL;
+		}
+	}
+}
+
+void GameSave::read(char * data, int dataSize)
+{
+	if(dataSize > 0)
+	{
+		if(data[0] == 0x50 || data[0] == 0x66)
+		{
+#ifdef DEBUG
+			std::cout << "Reading PSv..." << std::endl;
+#endif
+			readPSv(data, dataSize);
+		}
+		else if(data[0] == 'O')
+		{
+#ifdef DEBUG
+			std::cout << "Reading OPS..." << std::endl;
+#endif
+			readOPS(data, dataSize);
+		}
+		else
+		{
+			std::cerr << "Got Magic number '" << data[0] << "'" << std::endl;
+			throw ParseException(ParseException::Corrupt, "Invalid save format");
+		}
+	}
+	else
+	{
+		throw ParseException(ParseException::Corrupt, "No data");
 	}
 }
 
@@ -262,6 +421,7 @@ void GameSave::readOPS(char * data, int dataLength)
 	int i, freeIndicesCount, x, y, j;
 	int *freeIndices = NULL;
 	int blockX, blockY, blockW, blockH, fullX, fullY, fullW, fullH;
+	int savedVersion = inputData[4];
 	bson b;
 	bson_iterator iter;
 	
@@ -278,7 +438,7 @@ void GameSave::readOPS(char * data, int dataLength)
 	fullH = blockH*CELL;
 	
 	//From newer version
-	if(inputData[4] > SAVE_VERSION)
+	if(savedVersion > SAVE_VERSION)
 		throw ParseException(ParseException::WrongVersion, "Save from newer version");
 	
 	//Incompatible cell size
@@ -707,6 +867,11 @@ void GameSave::readOPS(char * data, int dataLength)
 					{
 						if(i >= partsDataLen) goto fail;
 						particles[newIndex].tmp2 = partsData[i++];
+						if(fieldDescriptor & 0x800)
+						{
+							if(i >= partsDataLen) goto fail;
+							particles[newIndex].tmp2 |= (((unsigned)partsData[i++]) << 8);
+						}
 					}
 
 					//Particle specific parsing:
@@ -715,6 +880,32 @@ void GameSave::readOPS(char * data, int dataLength)
 					case PT_SOAP:
 						//Clear soap links, links will be added back in if soapLinkData is present
 						particles[newIndex].ctype &= ~6;
+						break;
+					case PT_BOMB:
+						if (particles[newIndex].tmp!=0 && savedVersion < 81)
+						{
+							particles[newIndex].type = PT_EMBR;
+							particles[newIndex].ctype = 0;
+							if (particles[newIndex].tmp==1)
+								particles[newIndex].tmp = 0;
+						}
+						break;
+					case PT_DUST:
+						if (particles[newIndex].life>0 && savedVersion < 81)
+						{
+							particles[newIndex].type = PT_EMBR;
+							particles[newIndex].ctype = (particles[newIndex].tmp2<<16) | (particles[newIndex].tmp<<8) | particles[newIndex].ctype;
+							particles[newIndex].tmp = 1;
+						}
+						break;
+					case PT_FIRW:
+						if (particles[newIndex].tmp>=2 && savedVersion < 81)
+						{
+							int caddress = restrict_flt(restrict_flt((float)(particles[newIndex].tmp-4), 0.0f, 200.0f)*3, 0.0f, (200.0f*3)-3);
+							particles[newIndex].type = PT_EMBR;
+							particles[newIndex].tmp = 1;
+							particles[newIndex].ctype = (((unsigned char)(firw_data[caddress]))<<16) | (((unsigned char)(firw_data[caddress+1]))<<8) | ((unsigned char)(firw_data[caddress+2]));
+						}
 						break;
 					}
 					newIndex++;
@@ -859,8 +1050,13 @@ void GameSave::readPSv(char * data, int dataLength)
 	
 	setSize(bw, bh);
 	
-	if (BZ2_bzBuffToBuffDecompress((char *)d, (unsigned *)&i, (char *)(c+12), dataLength-12, 0, 0))
-		throw ParseException(ParseException::Corrupt, "Cannot decompress");
+	int bzStatus = 0;
+	if (bzStatus = BZ2_bzBuffToBuffDecompress((char *)d, (unsigned *)&i, (char *)(c+12), dataLength-12, 0, 0))
+	{
+		std::stringstream bzStatusStr;
+		bzStatusStr << bzStatus;
+		throw ParseException(ParseException::Corrupt, "Cannot decompress: " + bzStatusStr.str());
+	}
 	dataLength = i;
 
 	std::cout << "Parsing " << dataLength << " bytes of data, version " << ver << std::endl;
@@ -1291,6 +1487,30 @@ void GameSave::readPSv(char * data, int dataLength)
 					particles[i-1].tmp2 = particles[i-1].life;
 				}
 			}
+
+			if (ver<81)
+			{
+				if (particles[i-1].type==PT_BOMB && particles[i-1].tmp!=0)
+				{
+					particles[i-1].type = PT_EMBR;
+					particles[i-1].ctype = 0;
+					if (particles[i-1].tmp==1)
+						particles[i-1].tmp = 0;
+				}
+				if (particles[i-1].type==PT_DUST && particles[i-1].life>0)
+				{
+					particles[i-1].type = PT_EMBR;
+					particles[i-1].ctype = (particles[i-1].tmp2<<16) | (particles[i-1].tmp<<8) | particles[i-1].ctype;
+					particles[i-1].tmp = 1;
+				}
+				if (particles[i-1].type==PT_FIRW && particles[i-1].tmp>=2)
+				{
+					int caddress = restrict_flt(restrict_flt((float)(particles[i-1].tmp-4), 0.0f, 200.0f)*3, 0.0f, (200.0f*3)-3);
+					particles[i-1].type = PT_EMBR;
+					particles[i-1].tmp = 1;
+					particles[i-1].ctype = (((unsigned char)(firw_data[caddress]))<<16) | (((unsigned char)(firw_data[caddress+1]))<<8) | ((unsigned char)(firw_data[caddress+2]));
+				}
+			}
 		}
 	}
 	
@@ -1483,7 +1703,7 @@ char * GameSave::serialiseOPS(int & dataLength)
 	//Copy parts data
 	/* Field descriptor format:
 	 |		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|		0		|
-	 |		tmp2	|	ctype[2]	|		vy		|		vx		|	dcololour	|	ctype[1]	|		tmp[2]	|		tmp[1]	|		life[2]	|		life[1]	|	temp dbl len|
+	 																|	tmp2[2]		|		tmp2	|	ctype[2]	|		vy		|		vx		|	dcololour	|	ctype[1]	|		tmp[2]	|		tmp[1]	|		life[2]	|		life[1]	|	temp dbl len|
 	 life[2] means a second byte (for a 16 bit field) if life[1] is present
 	 */
 	partsData = (unsigned char *)malloc(NPART * (sizeof(Particle)+1));
@@ -1600,11 +1820,16 @@ char * GameSave::serialiseOPS(int & dataLength)
 					partsData[partsDataLen++] = vTemp;
 				}
 				
-				//Tmp2 (optional), 1 byte
+				//Tmp2 (optional), 1 or 2 bytes
 				if(particles[i].tmp2)
 				{
 					fieldDesc |= 1 << 10;
 					partsData[partsDataLen++] = particles[i].tmp2;
+					if(particles[i].tmp2 > 255)
+					{
+						fieldDesc |= 1 << 11;
+						partsData[partsDataLen++] = particles[i].tmp2 >> 8;
+					}
 				}
 				
 				//Write the field descriptor;

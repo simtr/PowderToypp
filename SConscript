@@ -1,4 +1,4 @@
-import os, sys, subprocess
+import os, sys, subprocess, time
 
 ##Fix for long command line - http://scons.org/wiki/LongCmdLinesOnWin32
 class ourSpawn:
@@ -39,6 +39,13 @@ AddOption('--sse',dest="sse",action='store_true',default=False,help="Enable SSE 
 AddOption('--sse2',dest="sse2",action='store_true',default=False,help="Enable SSE2 optimisations")
 AddOption('--sse3',dest="sse3",action='store_true',default=False,help="Enable SSE3 optimisations")
 AddOption('--x86',dest="x86",action='store_true',default=True,help="Target Intel x86 platform")
+
+AddOption('--debugging', dest="debug", action="store_true", default=False, help="Enable debug options")
+AddOption('--beta',dest="beta",action='store_true',default=False,help="Beta build.")
+AddOption('--save-version',dest="save-version",default=False,help="Save version.")
+AddOption('--minor-version',dest="minor-version",default=False,help="Minor version.")
+AddOption('--build-number',dest="build-number",default=False,help="Build number.")
+AddOption('--snapshot',dest="snapshot",default=False,help="Snapshot build.")
 
 if((not GetOption('lin32')) and (not GetOption('lin64')) and (not GetOption('win32')) and (not GetOption('macosx'))):
     print "You must specify a platform to target"
@@ -119,12 +126,30 @@ if(GetOption('lin32') or GetOption('lin64')):
         env.Append(CCFLAGS=['-m64'])
         env.Append(CPPDEFINES=["LIN64"])
 
+if(GetOption('beta')):
+    env.Append(CPPDEFINES='BETA')
+
+if(GetOption('snapshot')):
+    env.Append(CPPDEFINES={'SNAPSHOT_ID': GetOption('snapshot')})
+    env.Append(CPPDEFINES='SNAPSHOT')
+else:
+    env.Append(CPPDEFINES={"SNAPSHOT_ID": int(time.time())})
+
+if(GetOption('save-version')):
+    env.Append(CPPDEFINES={'SAVE_VERSION': GetOption('major-version')})
+
+if(GetOption('minor-version')):
+    env.Append(CPPDEFINES={'MINOR_VERSION': GetOption('minor-version')})
 
 if(GetOption('release')):
     env.Append(CCFLAGS=['-O3', '-ftree-vectorize', '-funsafe-math-optimizations', '-ffast-math', '-fomit-frame-pointer', '-funsafe-loop-optimizations', '-Wunsafe-loop-optimizations'])
 
 if(GetOption('x86')):
     env.Append(CPPDEFINES='X86')
+
+if(GetOption('debug')):
+    env.Append(CPPDEFINES='DEBUG')
+    env.Append(CCFLAGS='-g')
 
 if(GetOption('sse')):
     env.Append(CCFLAGS='-msse')
@@ -150,14 +175,38 @@ elif(GetOption('opengl-renderer')):
 
 sources=Glob("src/*.cpp")
 if(GetOption('win32')):
-	sources += env.RES('resources/powder-res.rc')
+    sources += env.RES('resources/powder-res.rc')
 sources+=Glob("src/*/*.cpp")
 sources+=Glob("src/simulation/elements/*.cpp")
 sources+=Glob("src/simulation/tools/*.cpp")
-sources+=Glob("generated/*.cpp")
+sources+=Glob("generated/ToolClasses.cpp")
+sources+=Glob("generated/ElementClasses.cpp")
+
 
 SetupSpawn(env)
 
-t=env.Program(target='powder', source=sources)
+programName = "powder"
+
+if(GetOption('win32')):
+    programName = "Powder"
+
+if(GetOption('lin64')):
+    programName += "64"
+
+if(not (GetOption('sse2') or GetOption('sse3'))):
+    programName += "-legacy"
+
+if(GetOption('macosx')):
+    programName += "-x"
+
+if(GetOption('win32')):
+    programName += ".exe"
+
+env.Command(['generated/ElementClasses.cpp', 'generated/ElementClasses.h'], Glob('src/simulation/elements/*.cpp'), "python generator.py elements $TARGETS $SOURCES")
+env.Command(['generated/ToolClasses.cpp', 'generated/ToolClasses.h'], Glob('src/simulation/tools/*.cpp'), "python generator.py tools $TARGETS $SOURCES")
+t=env.Program(target=programName, source=sources)
 Default(t)
+
+#if(GetOption('release')):
+#    StripExecutable(t);
 

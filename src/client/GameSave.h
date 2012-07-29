@@ -59,10 +59,16 @@ public:
 	GameSave(GameSave & save);
 	GameSave(int width, int height);
 	GameSave(char * data, int dataSize);
+	GameSave(std::vector<char> data);
+	GameSave(std::vector<unsigned char> data);
 	~GameSave();
 	void setSize(int width, int height);
 	char * Serialise(int & dataSize);
 	void Transform(matrix2d transform, vector2d translate);
+
+	void Expand();
+	void Collapse();
+	bool Collapsed();
 	
 	inline GameSave& operator << (Particle v)
 	{
@@ -81,10 +87,15 @@ public:
 	}
 		
 private:
+	bool expanded;
+	bool hasOriginalData;
 	float * fanVelXPtr;
 	float * fanVelYPtr;
 	unsigned char * blockMapPtr;
 
+	std::vector<char> originalData;
+
+	void read(char * data, int dataSize);
 	void readOPS(char * data, int dataLength);
 	void readPSv(char * data, int dataLength);
 	char * serialiseOPS(int & dataSize);

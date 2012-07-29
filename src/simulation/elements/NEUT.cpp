@@ -134,6 +134,8 @@ int Element_NEUT::update(UPDATE_FUNC_ARGS)
 					sim->kill_part(i);
 					return 1;
 				}
+				else if ((r&0xFF)==PT_EXOT && 5>(rand()%100))
+					parts[r>>8].life = 1500;
 				/*if(parts[r>>8].type>1 && parts[r>>8].type!=PT_NEUT && parts[r>>8].type-1!=PT_NEUT && parts[r>>8].type-1!=PT_STKM &&
 				  (elements[parts[r>>8].type-1].menusection==SC_LIQUID||
 				  elements[parts[r>>8].type-1].menusection==SC_EXPLOSIVE||
@@ -170,7 +172,7 @@ int Element_NEUT::create_n_parts(Simulation * sim, int n, int x, int y, float vx
 	if (n>340) {
 		n = 340;
 	}
-	if (x<0 || y<0 || x>=XRES || y>=YRES || t<0 || t>=PT_NUM)
+	if (x<0 || y<0 || x>=XRES || y>=YRES || t<0 || t>=PT_NUM || !sim->elements[t].Enabled)
 		return -1;
 	
 	for (c=0; c<n; c++) {

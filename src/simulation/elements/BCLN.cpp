@@ -57,7 +57,7 @@ int Element_BCLN::update(UPDATE_FUNC_ARGS)
 		parts[i].vx += advection*sim->vx[y/CELL][x/CELL];
 		parts[i].vy += advection*sim->vy[y/CELL][x/CELL];
 	}
-	if (parts[i].ctype<=0 || parts[i].ctype>=PT_NUM || (parts[i].ctype==PT_LIFE && (parts[i].tmp<0 || parts[i].tmp>=NGOLALT)))
+	if (parts[i].ctype<=0 || parts[i].ctype>=PT_NUM || !sim->elements[parts[i].ctype].Enabled || (parts[i].ctype==PT_LIFE && (parts[i].tmp<0 || parts[i].tmp>=NGOLALT)))
 	{
 		int r, rx, ry;
 		for (rx=-1; rx<2; rx++)
@@ -82,7 +82,7 @@ int Element_BCLN::update(UPDATE_FUNC_ARGS)
 	}
 	else {
 		if (parts[i].ctype==PT_LIFE) sim->create_part(-1, x+rand()%3-1, y+rand()%3-1, parts[i].ctype|(parts[i].tmp<<8));
-		else
+		else if (parts[i].ctype!=PT_LIGH || (rand()%30)==0)
 		{
 			int np = sim->create_part(-1, x+rand()%3-1, y+rand()%3-1, parts[i].ctype);
 			if (np>=0)

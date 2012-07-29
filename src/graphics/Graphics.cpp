@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iostream>
 #include <bzlib.h>
 #include <string>
 #include "Config.h"
@@ -6,6 +7,35 @@
 #include "Graphics.h"
 #define INCLUDE_FONTDATA
 #include "font.h"
+
+VideoBuffer::VideoBuffer(int width, int height):
+	Width(width),
+	Height(height)
+{
+	Buffer = new pixel[width*height];
+	std::fill(Buffer, Buffer+(width*height), 0);
+};
+
+VideoBuffer::VideoBuffer(const VideoBuffer & old):
+	Width(old.Width),
+	Height(old.Height)
+{
+	Buffer = new pixel[old.Width*old.Height];
+	std::copy(old.Buffer, old.Buffer+(old.Width*old.Height), Buffer);
+};
+
+VideoBuffer::VideoBuffer(VideoBuffer * old):
+	Width(old->Width),
+	Height(old->Height)
+{
+	Buffer = new pixel[old->Width*old->Height];
+	std::copy(old->Buffer, old->Buffer+(old->Width*old->Height), Buffer);
+};
+
+VideoBuffer::~VideoBuffer()
+{
+	delete[] Buffer;
+};
 
 TPT_INLINE void VideoBuffer::BlendPixel(int x, int y, int r, int g, int b, int a)
 {
@@ -44,7 +74,7 @@ TPT_INLINE void VideoBuffer::SetPixel(int x, int y, int r, int g, int b, int a)
 #ifdef PIX32OGL
 	Buffer[y*(Width)+x] = PIXRGBA(r,g,b,a);
 #else
-	Buffer[y*(Width)+x] = PIXRGB(r,g,b);
+	Buffer[y*(Width)+x] = PIXRGB((r*a)>>8, (g*a)>>8, (b*a)>>8);
 #endif
 }
 
@@ -301,6 +331,9 @@ pixel *Graphics::resample_img_nn(pixel * src, int sw, int sh, int rw, int rh)
 
 pixel *Graphics::resample_img(pixel *src, int sw, int sh, int rw, int rh)
 {
+#ifdef DEBUG
+	std::cout << "Resampling " << sw << "x" << sh << " to " << rw << "x" << rh << std::endl;
+#endif
 	int y, x, fxceil, fyceil;
 	//int i,j,x,y,w,h,r,g,b,c;
 	pixel *q = NULL;
@@ -308,7 +341,7 @@ pixel *Graphics::resample_img(pixel *src, int sw, int sh, int rw, int rh)
 		//Don't resample
 		q = (pixel *)malloc(rw*rh*PIXELSIZE);
 		memcpy(q, src, rw*rh*PIXELSIZE);
-	} else if(rw > sw && rh > sh){
+	} else if(rw >= sw && rh >= sh){
 		float fx, fy, fyc, fxc;
 		double intp;
 		pixel tr, tl, br, bl;
@@ -347,14 +380,16 @@ pixel *Graphics::resample_img(pixel *src, int sw, int sh, int rw, int rh)
 		rw = sw;
 		rh = sh;
 		while(rrw != rw && rrh != rh){
-			rw *= 0.7;
-			rh *= 0.7;
-			if(rw <= rrw || rh <= rrh){
+			if(rw > rrw)
+				rw *= 0.7;
+			if(rh > rrh)
+				rh *= 0.7;
+			if(rw <= rrw)
 				rw = rrw;
+			if(rh <= rrh)
 				rh = rrh;
-			}
 			q = (pixel *)malloc(rw*rh*PIXELSIZE);
-			//Bilinear interpolation for upscaling
+			//Bilinear interpolation
 			for (y=0; y<rh; y++)
 				for (x=0; x<rw; x++)
 				{
@@ -684,73 +719,148 @@ void Graphics::textsize(const char * s, int & width, int & height)
 	height = cHeight;
 }
 
-void Graphics::draw_icon(int x, int y, Icon icon)
+void Graphics::draw_icon(int x, int y, Icon icon, unsigned char alpha, bool invert)
 {
 	y--;
 	switch(icon)
 	{
 	case IconOpen:
-		drawchar(x, y, 0x81, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x81, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x81, 255, 255, 255, alpha);
 		break;
 	case IconReload:
-		drawchar(x, y, 0x91, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x91, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x91, 255, 255, 255, alpha);
 		break;
 	case IconSave:
-		drawchar(x, y, 0x82, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x82, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x82, 255, 255, 255, alpha);
 		break;
 	case IconVoteUp:
-		drawchar(x, y, 0xCB, 0, 187, 18, 255);
+		if(invert)
+			drawchar(x, y, 0xCB, 0, 100, 0, alpha);
+		else
+			drawchar(x, y, 0xCB, 0, 187, 18, alpha);
 		break;
 	case IconVoteDown:
-		drawchar(x, y, 0xCA, 187, 40, 0, 255);
+		if(invert)
+			drawchar(x, y, 0xCA, 100, 10, 0, alpha);
+		else
+			drawchar(x, y, 0xCA, 187, 40, 0, alpha);
 		break;
 	case IconTag:
-		drawchar(x, y, 0x83, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x83, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x83, 255, 255, 255, alpha);
 		break;
 	case IconNew:
-		drawchar(x, y, 0x92, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x92, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x92, 255, 255, 255, alpha);
 		break;
 	case IconLogin:
-		drawchar(x, y, 0x84, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x84, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x84, 255, 255, 255, alpha);
 		break;
 	case IconSimulationSettings:
-		drawchar(x, y, 0xCF, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y+1, 0xCF, 0, 0, 0, alpha);
+		else
+			drawchar(x, y+1, 0xCF, 255, 255, 255, alpha);
 		break;
 	case IconRenderSettings:
-		addchar(x, y, 0xD8, 255, 0, 0, 255);
-		addchar(x, y, 0xD9, 0, 255, 0, 255);
-		addchar(x, y, 0xDA, 0, 0, 255, 255);
+		if(invert)
+		{
+			drawchar(x, y+1, 0xD8, 255, 0, 0, alpha);
+			drawchar(x, y+1, 0xD9, 0, 255, 0, alpha);
+			drawchar(x, y+1, 0xDA, 0, 0, 255, alpha);
+		}
+		else
+		{
+			addchar(x, y+1, 0xD8, 255, 0, 0, alpha);
+			addchar(x, y+1, 0xD9, 0, 255, 0, alpha);
+			addchar(x, y+1, 0xDA, 0, 0, 255, alpha);
+		}
 		break;
 	case IconPause:
-		drawchar(x, y, 0x90, 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 0x90, 0, 0, 0, alpha);
+		else
+			drawchar(x, y, 0x90, 255, 255, 255, alpha);
 		break;
 	case IconFavourite:
-		drawchar(x, y, 0xCC, 192, 160, 64, 255);
+		if(invert)
+			drawchar(x, y, 0xCC, 100, 80, 32, alpha);
+		else
+			drawchar(x, y, 0xCC, 192, 160, 64, alpha);
 		break;
 	case IconReport:
-		drawchar(x, y, 0xE3, 255, 255, 0, 255);
+		if(invert)
+			drawchar(x, y, 0xE3, 140, 140, 0, alpha);
+		else
+			drawchar(x, y, 0xE3, 255, 255, 0, alpha);
 		break;
 	case IconUsername:
-		drawchar(x, y, 0x8B, 32, 64, 128, 255);
-		drawchar(x, y, 0x8A, 255, 255, 255, 255);
+		if(invert)
+		{
+			drawchar(x, y, 0x8B, 32, 64, 128, alpha);
+			drawchar(x, y, 0x8A, 0, 0, 0, alpha);
+		}
+		else
+		{
+			drawchar(x, y, 0x8B, 32, 64, 128, alpha);
+			drawchar(x, y, 0x8A, 255, 255, 255, alpha);
+		}
 		break;
 	case IconPassword:
-		drawchar(x, y, 0x8C, 160, 144, 32, 255);
-		drawchar(x, y, 0x84, 255, 255, 255, 255);
+		if(invert)
+		{
+			drawchar(x, y, 0x8C, 160, 144, 32, alpha);
+			drawchar(x, y, 0x84, 0, 0, 0, alpha);
+		}
+		else
+		{
+			drawchar(x, y, 0x8C, 160, 144, 32, alpha);
+			drawchar(x, y, 0x84, 255, 255, 255, alpha);
+		}
 		break;
 	case IconClose:
-		drawchar(x, y, 0xAA, 230, 230, 230, 255);	
+		if(invert)
+			drawchar(x, y, 0xAA, 20, 20, 20, alpha);	
+		else
+			drawchar(x, y, 0xAA, 230, 230, 230, alpha);	
 		break;
 	case IconVoteSort:
 	case IconDateSort:
 	case IconFolder:
 	case IconSearch:
 	case IconDelete:
-		drawchar(x, y, 0x86, 255, 55, 55, 255);
-		drawchar(x, y, 0x85, 255, 255, 255, 255);
+		if(invert)
+		{
+			drawchar(x, y, 0x86, 255, 55, 55, alpha);
+			drawchar(x, y, 0x85, 0, 0, 0, alpha);
+		}
+		else
+		{
+			drawchar(x, y, 0x86, 255, 55, 55, alpha);
+			drawchar(x, y, 0x85, 255, 255, 255, alpha);
+		}
 		break;
 	default:
-		drawchar(x, y, 't', 255, 255, 255, 255);
+		if(invert)
+			drawchar(x, y, 't', 0, 0 ,0 ,alpha);
+		else
+			drawchar(x, y, 't', 255, 255, 255, alpha);
 		break;
 	}
 }
@@ -786,4 +896,13 @@ pixel *Graphics::render_packed_rgb(void *image, int width, int height, int cmp_s
 	return res;
 }
 
+void Graphics::draw_image(const VideoBuffer & vidBuf, int x, int y, int a)
+{
+	draw_image(vidBuf.Buffer, x, y, vidBuf.Width, vidBuf.Height, a);
+}
+
+void Graphics::draw_image(VideoBuffer * vidBuf, int x, int y, int a)
+{
+	draw_image(vidBuf->Buffer, x, y, vidBuf->Width, vidBuf->Height, a);
+}
 

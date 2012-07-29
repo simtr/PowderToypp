@@ -20,7 +20,8 @@ GameModel::GameModel():
 	colourSelector(false),
 	clipboard(NULL),
 	stamp(NULL),
-	placeSave(NULL)
+	placeSave(NULL),
+	colour(255, 0, 0, 255)
 {
 	sim = new Simulation();
 	ren = new Renderer(ui::Engine::Ref().g, sim);
@@ -84,7 +85,7 @@ GameModel::GameModel():
 	//Build other menus from wall data
 	for(int i = 0; i < UI_WALLCOUNT; i++)
 	{
-		Tool * tempTool = new WallTool(i, "", std::string(sim->wtypes[i].descs), PIXR(sim->wtypes[i].colour), PIXG(sim->wtypes[i].colour), PIXB(sim->wtypes[i].colour));
+		Tool * tempTool = new WallTool(i, "", std::string(sim->wtypes[i].descs), PIXR(sim->wtypes[i].colour), PIXG(sim->wtypes[i].colour), PIXB(sim->wtypes[i].colour), sim->wtypes[i].textureGen);
 		menuList[SC_WALL]->AddTool(tempTool);
 		//sim->wtypes[i]
 	}
@@ -92,6 +93,7 @@ GameModel::GameModel():
 	//Add special sign and prop tools
 	menuList[SC_TOOL]->AddTool(new SignTool());
 	menuList[SC_TOOL]->AddTool(new PropertyTool());
+	menuList[SC_TOOL]->AddTool(new WindTool(0, "WIND", "Create air movement", 64, 64, 64));
 	
 	//Build menu for simtools
 	for(int i = 0; i < sim->tools.size(); i++)
@@ -108,6 +110,7 @@ GameModel::GameModel():
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendDivide, "DIV", "Colour blending: Divide" , 0, 0, 0));
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSmudge, "SMDG", "Smudge colour", 0, 0, 0));
 	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::BlendSet, "SET", "Set colour (No blending)", 0, 0, 0));
+	menuList[SC_DECO]->AddTool(new DecorationTool(DecorationTool::Remove, "CLR", "Clear any set decoration", 0, 0, 0));
 
 	//Set default brush palette
 	brushList.push_back(new EllipseBrush(ui::Point(4, 4)));
@@ -135,6 +138,15 @@ GameModel::GameModel():
 		if(stampFile && stampFile->GetGameSave())
 			stamp = stampFile->GetGameSave();
 	}
+
+
+	//Set default decoration colour
+	unsigned char colourR = min(Client::Ref().GetPrefInteger("Decoration.Red", 200), 255);
+	unsigned char colourG = min(Client::Ref().GetPrefInteger("Decoration.Green", 100), 255);
+	unsigned char colourB = min(Client::Ref().GetPrefInteger("Decoration.Blue", 50), 255);
+	unsigned char colourA = min(Client::Ref().GetPrefInteger("Decoration.Alpha", 255), 255);
+
+	SetColourSelectorColour(ui::Colour(colourR, colourG, colourB, colourA));
 }
 
 GameModel::~GameModel()
@@ -147,6 +159,11 @@ GameModel::~GameModel()
 
 	std::vector<unsigned int> renderModes = ren->GetRenderMode();
 	Client::Ref().SetPref("Renderer.RenderModes", std::vector<double>(renderModes.begin(), renderModes.end()));
+
+	Client::Ref().SetPref("Decoration.Red", (int)colour.Red);
+	Client::Ref().SetPref("Decoration.Green", (int)colour.Green);
+	Client::Ref().SetPref("Decoration.Blue", (int)colour.Blue);
+	Client::Ref().SetPref("Decoration.Alpha", (int)colour.Alpha);
 
 	for(int i = 0; i < menuList.size(); i++)
 	{
@@ -272,6 +289,28 @@ void GameModel::SetSave(SaveInfo * newSave)
 	if(currentSave && currentSave->GetGameSave())
 	{
 		GameSave * saveData = currentSave->GetGameSave();
+		SetPaused(saveData->paused | GetPaused());
+		sim->gravityMode = saveData->gravityMode;
+		sim->air->airMode = saveData->airMode;
+		sim->legacy_enable = saveData->legacyEnable;
+		sim->water_equal_test = saveData->waterEEnabled;
+		if(saveData->gravityEnable)
+			sim->grav->start_grav_async();
+		else
+			sim->grav->stop_grav_async();
+		sim->clear_sim();
+		sim->Load(saveData);
+	}
+	notifySaveChanged();
+}
+
+void GameModel::SetSaveFile(SaveFile * newSave)
+{
+	SetSave(NULL);
+
+	if(newSave && newSave->GetGameSave())
+	{
+		GameSave * saveData = newSave->GetGameSave();
 		SetPaused(saveData->paused & GetPaused());
 		sim->gravityMode = saveData->gravityMode;
 		sim->air->airMode = saveData->airMode;
@@ -288,6 +327,8 @@ void GameModel::SetSave(SaveInfo * newSave)
 		sim->clear_sim();
 		sim->Load(saveData);
 	}
+	delete newSave;
+	
 	notifySaveChanged();
 }
 

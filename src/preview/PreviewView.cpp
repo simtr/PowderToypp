@@ -16,6 +16,8 @@
 #include "interface/Textbox.h"
 #include "Style.h"
 #include "search/Thumbnail.h"
+#include "client/Client.h"
+#include "interface/ScrollPanel.h"
 
 class PreviewView::LoginAction: public ui::ButtonAction
 {
@@ -53,11 +55,6 @@ PreviewView::PreviewView():
 	ui::Window(ui::Point(-1, -1), ui::Point((XRES/2)+200, (YRES/2)+150)),
 	savePreview(NULL),
 	doOpen(false),
-	commentsOffset(0),
-	commentsVel(0),
-	maxOffset(0),
-	commentsBegin(true),
-	commentsEnd(false),
 	addCommentBox(NULL),
 	submitCommentButton(NULL),
 	commentBoxHeight(20)
@@ -93,6 +90,7 @@ PreviewView::PreviewView():
 	favButton->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;	favButton->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
 	favButton->SetIcon(IconFavourite);
 	favButton->SetActionCallback(new FavAction(this));
+	favButton->Enabled = Client::Ref().GetAuthUser().ID?true:false;
 	AddComponent(favButton);
 
 	class ReportPromptCallback: public TextDialogueCallback {
@@ -120,6 +118,7 @@ PreviewView::PreviewView():
 	reportButton->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;	reportButton->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
 	reportButton->SetIcon(IconReport);
 	reportButton->SetActionCallback(new ReportAction(this));
+	reportButton->Enabled = Client::Ref().GetAuthUser().ID?true:false;
 	AddComponent(reportButton);
 
 	class BrowserOpenAction: public ui::ButtonAction
@@ -157,6 +156,9 @@ PreviewView::PreviewView():
 	pageInfo = new ui::Label(ui::Point((XRES/2) + 5, Size.Y+1), ui::Point(Size.X-((XRES/2) + 10), 15), "Page 1 of 1");
 	pageInfo->Appearance.HorizontalAlign = ui::Appearance::AlignCentre;	authorDateLabel->Appearance.VerticalAlign = ui::Appearance::AlignMiddle;
 
+	commentsPanel = new ui::ScrollPanel(ui::Point((XRES/2)+1, 1), ui::Point((Size.X-(XRES/2))-2, Size.Y-commentBoxHeight));
+	AddComponent(commentsPanel);
+
 	AddComponent(pageInfo);
 }
 
@@ -167,7 +169,7 @@ void PreviewView::commentBoxAutoHeight()
 	int textWidth = Graphics::textwidth(addCommentBox->GetText().c_str());
 	if(textWidth+5 > Size.X-(XRES/2)-48)
 	{
-		commentBoxHeight = 58;
+		commentBoxHeight = 59;
 		addCommentBox->SetMultiline(true);
 		addCommentBox->Appearance.VerticalAlign = ui::Appearance::AlignTop;
 
@@ -187,7 +189,7 @@ void PreviewView::commentBoxAutoHeight()
 		commentBoxSizeX = Size.X-(XRES/2)-48;
 		commentBoxSizeY = 17;
 	}
-	displayComments(commentsOffset);
+	commentsPanel->Size.Y = Size.Y-commentBoxHeight;
 }
 
 void PreviewView::DoDraw()
@@ -199,6 +201,18 @@ void PreviewView::DoDraw()
 		g->fillrect(Position.X+(Size.X/2)-101, Position.Y+(Size.Y/2)-26, 202, 52, 0, 0, 0, 210);
 		g->drawrect(Position.X+(Size.X/2)-100, Position.Y+(Size.Y/2)-25, 200, 50, 255, 255, 255, 180);
 		g->drawtext(Position.X+(Size.X/2)-(Graphics::textwidth("Loading save...")/2), Position.Y+(Size.Y/2)-5, "Loading save...", style::Colour::InformationTitle.Red, style::Colour::InformationTitle.Green, style::Colour::InformationTitle.Blue, 255);
+	}
+
+	for(int i = 0; i < commentTextComponents.size(); i++)
+	{
+		int linePos = commentTextComponents[i]->Position.Y+commentsPanel->ViewportPosition.Y+commentTextComponents[i]->Size.Y+4;
+		if(linePos > 0 && linePos < Size.Y-commentBoxHeight)
+		g->draw_line(
+				Position.X+1+XRES/2,
+				Position.Y+linePos,
+				Position.X+Size.X-2,
+				Position.Y+linePos,
+				255, 255, 255, 100);
 	}
 }
 
@@ -216,7 +230,7 @@ void PreviewView::OnDraw()
 		g->draw_image(savePreview->Data, (Position.X+1)+(((XRES/2)-savePreview->Size.X)/2), (Position.Y+1)+(((YRES/2)-savePreview->Size.Y)/2), savePreview->Size.X, savePreview->Size.Y, 255);
 	}
 	g->drawrect(Position.X, Position.Y, (XRES/2)+1, (YRES/2)+1, 255, 255, 255, 100);
-	g->draw_line(Position.X+1+XRES/2, Position.Y+1, Position.X+1+XRES/2, Position.Y+Size.Y-2, 200, 200, 200, 255);
+	g->draw_line(Position.X+XRES/2, Position.Y+1, Position.X+XRES/2, Position.Y+Size.Y-2, 200, 200, 200, 255);
 
 
 	g->draw_line(Position.X+1, Position.Y+12+YRES/2, Position.X-1+XRES/2, Position.Y+12+YRES/2, 100, 100, 100,255);
@@ -231,55 +245,10 @@ void PreviewView::OnDraw()
 		g->draw_icon(1+Position.X+2, Position.Y+(YRES/2)+4, IconVoteUp);
 		g->draw_icon(Position.X+(XRES/2)-12, Position.Y+(YRES/2)+1, IconVoteDown);
 	}
-
-	for(int i = 0; i < commentTextComponents.size(); i++)
-	{
-		g->draw_line(
-				Position.X+XRES/2,
-				Position.Y+commentTextComponents[i]->Position.Y+commentTextComponents[i]->Size.Y+4,
-				Position.X+Size.X-1,
-				Position.Y+commentTextComponents[i]->Position.Y+commentTextComponents[i]->Size.Y+4,
-				100, 100, 100, 255);
-	}
 }
 
 void PreviewView::OnTick(float dt)
 {
-	if(commentsVel > 5.0f) commentsVel = 5.0f;
-	if(commentsVel < -5.0f) commentsVel = -5.0f;
-	if(commentsVel > -0.5f && commentsVel < 0.5)
-		commentsVel = 0;
-
-	int oldOffset = commentsOffset;
-	commentsOffset += commentsVel;
-
-	commentsVel*=0.99f;
-
-	if(oldOffset!=int(commentsOffset))
-	{
-		if(commentsOffset<0)
-		{
-			commentsOffset = 0;
-			commentsVel = 0;
-			commentsBegin = true;
-			commentsEnd = false;
-		}
-		else if(commentsOffset>maxOffset)
-		{
-			commentsOffset = maxOffset;
-			commentsVel = 0;
-			commentsEnd = true;
-			commentsBegin = false;
-		}
-		else
-		{
-			commentsEnd = false;
-			commentsBegin = false;
-		}
-
-		displayComments(commentsOffset);
-	}
-
 	if(addCommentBox)
 	{
 		ui::Point positionDiff = ui::Point(commentBoxPositionX, commentBoxPositionY)-addCommentBox->Position;
@@ -306,6 +275,7 @@ void PreviewView::OnTick(float dt)
 			if(xdiff == 0)
 				xdiff = 1*isign(sizeDiff.X);
 			addCommentBox->Size.X += xdiff;
+			addCommentBox->Invalidate();
 		}
 		if(sizeDiff.Y!=0)
 		{
@@ -313,6 +283,7 @@ void PreviewView::OnTick(float dt)
 			if(ydiff == 0)
 				ydiff = 1*isign(sizeDiff.Y);
 			addCommentBox->Size.Y += ydiff;
+			addCommentBox->Invalidate();
 		}
 	}
 
@@ -323,6 +294,15 @@ void PreviewView::OnMouseDown(int x, int y, unsigned button)
 {
 	if(!(x > Position.X && y > Position.Y && y < Position.Y+Size.Y && x < Position.X+Size.X)) //Clicked outside window
 		c->Exit();
+}
+
+void PreviewView::OnMouseWheel(int x, int y, int d)
+{
+	if(commentsPanel->GetScrollLimit() == 1 && d < 0)
+		c->NextCommentPage();
+	if(commentsPanel->GetScrollLimit() == -1 && d > 0)
+		c->PrevCommentPage();
+
 }
 
 void PreviewView::NotifySaveChanged(PreviewModel * sender)
@@ -340,7 +320,7 @@ void PreviewView::NotifySaveChanged(PreviewModel * sender)
 		saveDescriptionLabel->SetText(save->Description);
 		if(save->Favourite)
 			favButton->Enabled = false;
-		else
+		else if(Client::Ref().GetAuthUser().ID)
 			favButton->Enabled = true;
 
 		if(save->GetGameSave())
@@ -386,60 +366,6 @@ void PreviewView::submitComment()
 
 		addCommentBox->SetPlaceholder("Add comment");
 		submitCommentButton->Enabled = true;
-	}
-}
-
-void PreviewView::displayComments(int yOffset)
-{
-	for(int i = 0; i < commentComponents.size(); i++)
-	{
-		RemoveComponent(commentComponents[i]);
-		delete commentComponents[i];
-	}
-	commentComponents.clear();
-	commentTextComponents.clear();
-
-	int currentY = -yOffset;
-	ui::Label * tempUsername;
-	ui::Label * tempComment;
-	for(int i = 0; i < comments.size(); i++)
-	{
-		int usernameY = currentY+5, commentY;
-		tempUsername = new ui::Label(ui::Point((XRES/2) + 5, currentY+5), ui::Point(Size.X-((XRES/2) + 10), 16), comments[i].authorName);
-		tempUsername->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;			tempUsername->Appearance.VerticalAlign = ui::Appearance::AlignBottom;
-		currentY += 16;
-
-		if(currentY+5 > Size.Y-commentBoxHeight || usernameY < 0)
-		{
-			delete tempUsername;
-			if(currentY+5 > Size.Y-commentBoxHeight)
-				break;
-		}
-		else
-		{
-			commentComponents.push_back(tempUsername);
-			AddComponent(tempUsername);
-		}
-
-		commentY = currentY+5;
-		tempComment = new ui::Label(ui::Point((XRES/2) + 5, currentY+5), ui::Point(Size.X-((XRES/2) + 10), -1), comments[i].comment);
-		tempComment->SetMultiline(true);
-		tempComment->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;			tempComment->Appearance.VerticalAlign = ui::Appearance::AlignTop;
-		tempComment->SetTextColour(ui::Colour(180, 180, 180));
-		currentY += tempComment->Size.Y+4;
-
-		if(currentY+5 > Size.Y-commentBoxHeight || commentY < 0)
-		{
-			delete tempComment;
-			if(currentY+5 > Size.Y-commentBoxHeight)
-				break;
-		}
-		else
-		{
-			commentComponents.push_back(tempComment);
-			AddComponent(tempComment);
-			commentTextComponents.push_back(tempComment);
-		}
 	}
 }
 
@@ -499,48 +425,44 @@ void PreviewView::NotifyCommentsChanged(PreviewModel * sender)
 		comments.clear();
 	}
 
-	ui::Label * tempUsername;
-	ui::Label * tempComment;
-	int maxY = 0;
-	for(int i = 0; i < comments.size(); i++)
 	{
-		tempUsername = new ui::Label(ui::Point(0, 0), ui::Point(Size.X-((XRES/2) + 10), 16), comments[i].authorName);
-		tempUsername->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
-		tempUsername->Appearance.VerticalAlign = ui::Appearance::AlignBottom;
-		maxY += 16;
-		tempComment = new ui::Label(ui::Point(0, 0), ui::Point(Size.X-((XRES/2) + 10), -1), comments[i].comment);
-		tempComment->SetMultiline(true);
-		tempComment->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
-		tempComment->Appearance.VerticalAlign = ui::Appearance::AlignTop;
-		tempComment->SetTextColour(ui::Colour(180, 180, 180));
-		maxY += tempComment->Size.Y+4;
+		for(int i = 0; i < commentComponents.size(); i++)
+		{
+			commentsPanel->RemoveChild(commentComponents[i]);
+			delete commentComponents[i];
+		}
+		commentComponents.clear();
+		commentTextComponents.clear();
 
-		delete tempUsername;
-		delete tempComment;
-	}
+		int currentY = 0;//-yOffset;
+		ui::Label * tempUsername;
+		ui::Label * tempComment;
+		for(int i = 0; i < comments.size(); i++)
+		{
+			int usernameY = currentY+5, commentY;
+			tempUsername = new ui::Label(ui::Point(5, currentY+5), ui::Point(Size.X-((XRES/2) + 10), 16), comments[i].authorName);
+			tempUsername->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
+			tempUsername->Appearance.VerticalAlign = ui::Appearance::AlignBottom;
+			currentY += 16;
+
+			commentComponents.push_back(tempUsername);
+			commentsPanel->AddChild(tempUsername);
 
 
-	maxOffset = (maxY-(Size.Y-commentBoxHeight))+16;
-	commentsBegin = true;
-	commentsEnd = false;
-	commentsOffset = 0;
-	commentsVel = 0;
-	displayComments(commentsOffset);
-}
+			commentY = currentY+5;
+			tempComment = new ui::Label(ui::Point(5, currentY+5), ui::Point(Size.X-((XRES/2) + 10), -1), comments[i].comment);
+			tempComment->SetMultiline(true);
+			tempComment->Appearance.HorizontalAlign = ui::Appearance::AlignLeft;
+			tempComment->Appearance.VerticalAlign = ui::Appearance::AlignTop;
+			tempComment->SetTextColour(ui::Colour(180, 180, 180));
+			currentY += tempComment->Size.Y+4;
 
-void PreviewView::OnMouseWheel(int x, int y, int d)
-{
-	if(!d)
-		return;
-	commentsVel-=d;
+			commentComponents.push_back(tempComment);
+			commentsPanel->AddChild(tempComment);
+			commentTextComponents.push_back(tempComment);
+		}
 
-	if(d<0)
-	{
-		if(commentsEnd)
-			c->NextCommentPage();
-	} else {
-		if(commentsBegin)
-			c->PrevCommentPage();
+		commentsPanel->InnerSize = ui::Point(commentsPanel->Size.X, currentY+4);
 	}
 }
 

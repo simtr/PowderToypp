@@ -7,6 +7,7 @@
 
 namespace ui
 {
+	class ContextMenu;
 	class Window;
 	class Panel;
 	
@@ -25,6 +26,7 @@ namespace ui
 		ui::Point textPosition;
 		ui::Point textSize;
 		ui::Point iconPosition;
+		ui::ContextMenu * menu;
 	public:
 		Component(Window* parent_state);
 		Component(Point position, Point size);
@@ -34,6 +36,8 @@ namespace ui
 		void* UserData;
 		inline Window* const GetParentWindow() const { return parentstate_; }
 		bool IsFocused() const;
+
+		void Invalidate() { drawn = false; }
 
 		Point Position;
 		Point Size;
@@ -55,6 +59,8 @@ namespace ui
 
 		//Get the parent component.
 		inline Panel* const GetParent() const { return _parent; }
+
+		virtual void OnContextMenuAction(int item);
 		
 		//UI functions:
 		/*

@@ -22,12 +22,18 @@
 #include "Misc.h"
 
 #include "interface/Point.h"
-
 #include "client/SaveInfo.h"
-
 #include "ClientListener.h"
-
 #include "Update.h"
+
+extern "C"
+{
+#if defined(WIN32) && !defined(__GNUC__)
+#include <io.h>
+#else
+#include <dirent.h>
+#endif
+}
 
 Client::Client():
 	authUser(0, ""),
@@ -117,6 +123,113 @@ Client::Client():
 	versionCheckRequest = http_async_req_start(NULL, SERVER "/Download/Version.json", NULL, 0, 1);
 }
 
+std::vector<std::string> Client::DirectorySearch(std::string directory, std::string search, std::string extension)
+{
+	std::vector<std::string> extensions;
+	extensions.push_back(extension);
+	return DirectorySearch(directory, search, extensions);
+}
+
+std::vector<std::string> Client::DirectorySearch(std::string directory, std::string search, std::vector<std::string> extensions)
+{
+	//Get full file listing
+	std::vector<std::string> directoryList;
+#if defined(WIN32) && !defined(__GNUC__)
+	//Windows
+	struct _finddata_t currentFile;
+	intptr_t findFileHandle;
+	std::string fileMatch = directory + "*.*";
+	findFileHandle = _findfirst(fileMatch.c_str(), &currentFile);
+	if (findFileHandle == -1L)
+	{
+		printf("Unable to open directory\n");
+		return std::vector<std::string>();
+	}
+	do
+	{
+		std::string currentFileName = std::string(currentFile.name);
+		if(currentFileName.length()>4)
+			directoryList.push_back(directory+currentFileName);
+	}
+	while (_findnext(findFileHandle, &currentFile) == 0);
+	_findclose(findFileHandle);
+#else
+	//Linux or MinGW
+	struct dirent * directoryEntry;
+	DIR *directoryHandle = opendir(directory.c_str());
+	if(!directoryHandle)
+	{
+		printf("Unable to open directory\n");
+		return std::vector<std::string>();
+	}
+	while(directoryEntry = readdir(directoryHandle))
+	{
+		std::string currentFileName = std::string(directoryEntry->d_name);
+		if(currentFileName.length()>4)
+			directoryList.push_back(directory+currentFileName);
+	}
+	closedir(directoryHandle);
+#endif
+
+	std::vector<std::string> searchResults;
+	for(std::vector<std::string>::iterator iter = directoryList.begin(), end = directoryList.end(); iter != end; ++iter)
+	{
+		std::string filename = *iter;
+		bool extensionMatch = !extensions.size();
+		for(std::vector<std::string>::iterator extIter = extensions.begin(), extEnd = extensions.end(); extIter != extEnd; ++extIter)
+		{
+			if(filename.find(*extIter)==filename.length()-(*extIter).length())
+			{
+				extensionMatch = true;
+				break;
+			}
+		}
+		bool searchMatch = !search.size();
+		if(search.size() && filename.find(search)!=std::string::npos)
+			searchMatch = true;
+		
+		if(searchMatch && extensionMatch)
+			searchResults.push_back(filename);
+	}
+
+	//Filter results
+	return searchResults;
+}
+
+std::vector<unsigned char> Client::ReadFile(std::string filename)
+{
+	try
+	{
+		std::ifstream fileStream;
+		fileStream.open(string(filename).c_str(), ios::binary);
+		if(fileStream.is_open())
+		{
+			fileStream.seekg(0, ios::end);
+			size_t fileSize = fileStream.tellg();
+			fileStream.seekg(0);
+
+			unsigned char * tempData = new unsigned char[fileSize];
+			fileStream.read((char *)tempData, fileSize);
+			fileStream.close();
+
+			std::vector<unsigned char> fileData;
+			fileData.insert(fileData.end(), tempData, tempData+fileSize);
+			delete[] tempData;
+
+			return fileData;
+		}
+		else
+		{
+			return std::vector<unsigned char>();
+		}
+	}
+	catch(std::exception & e)
+	{
+		std::cerr << "Readfile: " << e.what() << std::endl;
+		throw;
+	}
+}
+
 void Client::Tick()
 {
 	//Check status on version check request
@@ -155,9 +268,7 @@ void Client::Tick()
 				json::Number betaBuild = betaVersion["Build"];
 				json::String betaFile = betaVersion["File"];
 
-				json::Number snapshotMajor = snapshotVersion["Major"];
-				json::Number snapshotMinor = snapshotVersion["Minor"];
-				json::Number snapshotBuild = snapshotVersion["Build"];
+				json::Number snapshotSnapshot = snapshotVersion["Snapshot"];
 				json::String snapshotFile = snapshotVersion["File"];
 
 				if(stableMajor.Value()>SAVE_VERSION || (stableMinor.Value()>MINOR_VERSION && stableMajor.Value()==SAVE_VERSION) || stableBuild.Value()>BUILD_NUM)
@@ -175,10 +286,10 @@ void Client::Tick()
 #endif
 
 #ifdef SNAPSHOT
-				if(snapshotMajor.Value()>SAVE_VERSION || (snapshotMinor.Value()>MINOR_VERSION && snapshotMajor.Value()==SAVE_VERSION) || snapshotBuild.Value()>BUILD_NUM)
+				if(snapshotSnapshot.Value() > SNAPSHOT_ID)
 				{
 					updateAvailable = true;
-					updateInfo = UpdateInfo(snapshotMajor.Value(), snapshotMinor.Value(), snapshotBuild.Value(), snapshotFile.Value(), UpdateInfo::Snapshot);
+					updateInfo = UpdateInfo(snapshotSnapshot.Value(), snapshotFile.Value(), UpdateInfo::Snapshot);
 				}
 #endif
 
@@ -371,7 +482,7 @@ SaveFile * Client::GetStamp(string stampID)
 		stampFile.read((char *)tempData, fileSize);
 		stampFile.close();
 
-		SaveFile * file = new SaveFile(string(STAMPS_DIR PATH_SEP + stampID + ".stm").c_str());
+		SaveFile * file = new SaveFile(string(stampID).c_str());
 		GameSave * tempSave = new GameSave((char *)tempData, fileSize);
 		file->SetGameSave(tempSave);
 		return file;
@@ -388,7 +499,12 @@ void Client::DeleteStamp(string stampID)
 	{
 		if((*iterator) == stampID)
 		{
-			remove(string(STAMPS_DIR PATH_SEP + stampID + ".stm").c_str());
+			stringstream stampFilename;
+			stampFilename << STAMPS_DIR;
+			stampFilename << PATH_SEP;
+			stampFilename << stampID;
+			stampFilename << ".stm";
+			remove(stampFilename.str().c_str());
 			stampIDs.erase(iterator);
 			return;
 		}
@@ -1435,6 +1551,34 @@ double Client::GetPrefNumber(std::string property, double defaultValue)
 	return defaultValue;
 }
 
+int Client::GetPrefInteger(std::string property, int defaultValue)
+{
+	try
+	{
+		std::stringstream defHexInt;
+		defHexInt << std::hex << defaultValue;
+
+		std::string hexString = GetPrefString(property, defHexInt.str());
+		int finalValue = defaultValue;
+
+		std::stringstream hexInt;
+		hexInt << hexString;
+
+		hexInt >> std::hex >> finalValue;
+
+		return finalValue;
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	catch(exception & e)
+	{
+
+	}
+	return defaultValue;
+}
+
 vector<string> Client::GetPrefStringArray(std::string property)
 {
 	try
@@ -1443,8 +1587,15 @@ vector<string> Client::GetPrefStringArray(std::string property)
 		vector<string> strArray;
 		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
 		{
-			json::String cValue = *iter;
-			strArray.push_back(cValue.Value());
+			try
+			{
+				json::String cValue = *iter;
+				strArray.push_back(cValue.Value());
+			}
+			catch (json::Exception & e)
+			{
+				
+			}
 		}
 		return strArray;
 	}
@@ -1463,8 +1614,15 @@ vector<double> Client::GetPrefNumberArray(std::string property)
 		vector<double> strArray;
 		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
 		{
-			json::Number cValue = *iter;
-			strArray.push_back(cValue.Value());
+			try
+			{
+				json::Number cValue = *iter;
+				strArray.push_back(cValue.Value());
+			}
+			catch (json::Exception & e)
+			{
+				
+			}
 		}
 		return strArray;
 	}
@@ -1475,6 +1633,40 @@ vector<double> Client::GetPrefNumberArray(std::string property)
 	return vector<double>();
 }
 
+vector<int> Client::GetPrefIntegerArray(std::string property)
+{
+	try
+	{
+		json::Array value = GetPref(property);
+		vector<int> intArray;
+		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
+		{
+			try
+			{
+				json::String cValue = *iter;
+				int finalValue = 0;
+		
+				std::string hexString = cValue.Value();
+				std::stringstream hexInt;
+				hexInt << std::hex << hexString;
+				hexInt >> finalValue;
+
+				intArray.push_back(finalValue);
+			}
+			catch (json::Exception & e)
+			{
+
+			}
+		}
+		return intArray;
+	}
+	catch (json::Exception & e)
+	{
+
+	}
+	return vector<int>();
+}
+
 vector<bool> Client::GetPrefBoolArray(std::string property)
 {
 	try
@@ -1483,8 +1675,15 @@ vector<bool> Client::GetPrefBoolArray(std::string property)
 		vector<bool> strArray;
 		for(json::Array::iterator iter = value.Begin(); iter != value.End(); ++iter)
 		{
-			json::Boolean cValue = *iter;
-			strArray.push_back(cValue.Value());
+			try
+			{
+				json::Boolean cValue = *iter;
+				strArray.push_back(cValue.Value());
+			}
+			catch (json::Exception & e)
+			{
+				
+			}
 		}
 		return strArray;
 	}
@@ -1521,6 +1720,14 @@ void Client::SetPref(std::string property, double value)
 	SetPref(property, numberValue);
 }
 
+void Client::SetPref(std::string property, int value)
+{
+	std::stringstream hexInt;
+	hexInt << std::hex << value;
+	json::UnknownElement intValue = json::String(hexInt.str());
+	SetPref(property, intValue);
+}
+
 void Client::SetPref(std::string property, vector<string> value)
 {
 	json::Array newArray;
@@ -1554,6 +1761,20 @@ void Client::SetPref(std::string property, vector<bool> value)
 	SetPref(property, newArrayValue);
 }
 
+void Client::SetPref(std::string property, vector<int> value)
+{
+	json::Array newArray;
+	for(vector<int>::iterator iter = value.begin(); iter != value.end(); ++iter)
+	{
+		std::stringstream hexInt;
+		hexInt << std::hex << *iter;
+
+		newArray.Insert(json::String(hexInt.str()));
+	}
+	json::UnknownElement newArrayValue = newArray;
+	SetPref(property, newArrayValue);
+}
+
 void Client::SetPref(std::string property, bool value)
 {
 	json::UnknownElement boolValue = json::Boolean(value);
@@ -1567,7 +1788,7 @@ json::UnknownElement Client::GetPref(std::string property)
 	json::UnknownElement currentRef = configDocumentCopy;
 	for(vector<string>::iterator iter = pTokens.begin(); iter != pTokens.end(); ++iter)
 	{
-		currentRef = currentRef[*iter];
+		currentRef = ((const json::UnknownElement &)currentRef)[*iter];
 	}
 	return currentRef;
 }

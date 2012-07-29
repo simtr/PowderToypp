@@ -45,15 +45,14 @@ void Renderer::RenderBegin()
 	DrawWalls();
 	DrawSigns();
 #ifndef OGLR
-	RenderZoom();
 	FinaliseParts();
 #endif
 }
 
 void Renderer::RenderEnd()
 {
-#ifdef OGLR
 	RenderZoom();
+#ifdef OGLR
 	FinaliseParts();
 #endif
 }
@@ -394,6 +393,135 @@ void Renderer::RenderZoom()
 	#endif
 }
 
+int Renderer_wtypesCount;
+wall_type * Renderer_wtypes = LoadWalls(Renderer_wtypesCount);
+
+
+VideoBuffer * Renderer::WallIcon(int wallID, int width, int height)
+{
+	int x, y, i, j, cr, cg, cb;
+	int wt = wallID;
+	if (wt<0 || wt>=Renderer_wtypesCount)
+		return 0;
+	wall_type *wtypes = Renderer_wtypes;
+	pixel pc = wtypes[wt].colour;
+	pixel gc = wtypes[wt].eglow;
+	VideoBuffer * newTexture = new VideoBuffer(width, height);
+	if (wtypes[wt].drawstyle==1)
+	{
+		for (j=0; j<height; j+=2)
+			for (i=(j>>1)&1; i<width; i+=2)
+				newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+	}
+	else if (wtypes[wt].drawstyle==2)
+	{
+		for (j=0; j<height; j+=2)
+			for (i=0; i<width; i+=2)
+				newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+	}
+	else if (wtypes[wt].drawstyle==3)
+	{
+		for (j=0; j<height; j++)
+			for (i=0; i<width; i++)
+				newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+	}
+	else if (wtypes[wt].drawstyle==4)
+	{
+		for (j=0; j<height; j++)
+			for (i=0; i<width; i++)
+				if(i%CELL == j%CELL)
+					newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+				else if  (i%CELL == (j%CELL)+1 || (i%CELL == 0 && j%CELL == CELL-1))
+					newTexture->SetPixel(i, j, PIXR(gc), PIXG(gc), PIXB(gc), 255);
+				else
+					newTexture->SetPixel(i, j, 0x20, 0x20, 0x20, 255);
+	}
+
+	// special rendering for some walls
+	if (wt==WL_EWALL)
+	{
+		for (j=0; j<height; j++)
+			for (i=0; i<width; i++)
+				if(i > width/2)
+				{
+					if (i&j&1)
+						newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+				}
+				else
+				{
+					if (!(i&j&1))
+						newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);	
+				}
+	}
+	else if (wt==WL_WALLELEC)
+	{
+		for (j=0; j<height; j++)
+			for (i=0; i<width; i++)
+			{
+				if (!((y*CELL+j)%2) && !((x*CELL+i)%2))
+					newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+				else
+					newTexture->SetPixel(i, j, 0x80, 0x80, 0x80, 255);
+			}
+	}
+	else if (wt==WL_EHOLE)
+	{
+		for (j=0; j<height; j++)
+			for (i=0; i<width; i++)
+				if(i < width/2)
+				{
+					if (i&j&1)
+						newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+				}
+				else
+				{
+					if (!(i&j&1))
+						newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);	
+				}
+	}
+	else if (wt == WL_ERASE)
+	{
+		for (j=0; j<height; j+=2)
+		{
+			for (i=1+(1&(j>>1)); i<width/2; i+=2)
+			{
+				newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+			}
+		}
+		for (j=0; j<height; j++)
+		{
+			for (i=width/2; i<width; i++)
+			{
+				newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+			}
+		}
+		for (j=4; j<width/2; j++)
+		{
+			newTexture->SetPixel(j+6, j, 0xFF, 0, 0, 255);
+			newTexture->SetPixel(j+7, j, 0xFF, 0, 0, 255);
+			newTexture->SetPixel(-j+21, j, 0xFF, 0, 0, 255);
+			newTexture->SetPixel(-j+22, j, 0xFF, 0, 0, 255);
+		}
+	}
+	else if(wt == WL_STREAM)
+	{
+		for (j=0; j<height; j++)
+		{
+			for (i=0; i<width; i++)
+			{
+				pc =  i==0||i==width-1||j==0||j==height-1 ? PIXPACK(0xA0A0A0) : PIXPACK(0x000000);
+				newTexture->SetPixel(i, j, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+			}
+		}
+		newTexture->SetCharacter(4, 3, 0x8D, 255, 255, 255, 255);
+		for (i=width/3; i<width; i++)
+		{
+			newTexture->SetPixel(i, 8+(int)(3.9f*cos(i*0.3f)), 255, 255, 255, 255);
+		}
+	}
+	return newTexture;
+}
+
 void Renderer::DrawWalls()
 {
 #ifndef OGLR
@@ -491,6 +619,27 @@ void Renderer::DrawWalls()
 							for (i=0; i<CELL; i+=2)
 								vid[(y*CELL+j)*(VIDXRES)+(x*CELL+i)] = PIXPACK(0x242424);
 					}
+				}
+				else if (wt==WL_STREAM)
+				{
+					float lx, ly, nx, ny;
+					lx = x*CELL + CELL*0.5f;
+					ly = y*CELL + CELL*0.5f;
+					for (int t = 0; t < 1024; t++)
+					{
+						nx = (int)(lx+0.5f);
+						ny = (int)(ly+0.5f);
+						if (nx<0 || nx>=XRES || ny<0 || ny>=YRES)
+							break;
+						addpixel(nx, ny, 255, 255, 255, 64);
+						i = nx/CELL;
+						j = ny/CELL;
+						lx += sim->vx[j][i]*0.125f;
+						ly += sim->vy[j][i]*0.125f;
+						if (bmap[j][i]==WL_STREAM && i!=x && j!=y)
+							break;
+					}
+					drawtext(x*CELL, y*CELL-2, "\x8D", 255, 255, 255, 128);
 				}
 				if (wtypes[wt].eglow && emap[y][x])
 				{
@@ -998,7 +1147,7 @@ void Renderer::render_parts()
 
 					if (colour_mode!=COLOUR_HEAT)
 					{
-						if (cplayer->elem<PT_NUM)
+						if (cplayer->elem<PT_NUM && cplayer->elem > 0)
 						{
 							colr = PIXR(elements[cplayer->elem].Colour);
 							colg = PIXG(elements[cplayer->elem].Colour);
@@ -1054,8 +1203,6 @@ void Renderer::render_parts()
 					glVertex2f(cplayer->legs[12], cplayer->legs[13]);
 					glEnd();
 #else
-					s = VIDXRES;
-
 					if (t==PT_STKM2)
 					{
 						legr = 100;
@@ -1079,23 +1226,23 @@ void Renderer::render_parts()
 					//head
 					if(t==PT_FIGH)
 					{
-						draw_line(nx, ny+2, nx+2, ny, colr, colg, colb, s);
-						draw_line(nx+2, ny, nx, ny-2, colr, colg, colb, s);
-						draw_line(nx, ny-2, nx-2, ny, colr, colg, colb, s);
-						draw_line(nx-2, ny, nx, ny+2, colr, colg, colb, s);
+						draw_line(nx, ny+2, nx+2, ny, colr, colg, colb, 255);
+						draw_line(nx+2, ny, nx, ny-2, colr, colg, colb, 255);
+						draw_line(nx, ny-2, nx-2, ny, colr, colg, colb, 255);
+						draw_line(nx-2, ny, nx, ny+2, colr, colg, colb, 255);
 					}
 					else
 					{
-						draw_line(nx-2, ny+2, nx+2, ny+2, colr, colg, colb, s);
-						draw_line(nx-2, ny-2, nx+2, ny-2, colr, colg, colb, s);
-						draw_line(nx-2, ny-2, nx-2, ny+2, colr, colg, colb, s);
-						draw_line(nx+2, ny-2, nx+2, ny+2, colr, colg, colb, s);
+						draw_line(nx-2, ny+2, nx+2, ny+2, colr, colg, colb, 255);
+						draw_line(nx-2, ny-2, nx+2, ny-2, colr, colg, colb, 255);
+						draw_line(nx-2, ny-2, nx-2, ny+2, colr, colg, colb, 255);
+						draw_line(nx+2, ny-2, nx+2, ny+2, colr, colg, colb, 255);
 					}
 					//legs
-					draw_line(nx, ny+3, cplayer->legs[0], cplayer->legs[1], legr, legg, legb, s);
-					draw_line(cplayer->legs[0], cplayer->legs[1], cplayer->legs[4], cplayer->legs[5], legr, legg, legb, s);
-					draw_line(nx, ny+3, cplayer->legs[8], cplayer->legs[9], legr, legg, legb, s);
-					draw_line(cplayer->legs[8], cplayer->legs[9], cplayer->legs[12], cplayer->legs[13], legr, legg, legb, s);
+					draw_line(nx, ny+3, cplayer->legs[0], cplayer->legs[1], legr, legg, legb, 255);
+					draw_line(cplayer->legs[0], cplayer->legs[1], cplayer->legs[4], cplayer->legs[5], legr, legg, legb, 255);
+					draw_line(nx, ny+3, cplayer->legs[8], cplayer->legs[9], legr, legg, legb, 255);
+					draw_line(cplayer->legs[8], cplayer->legs[9], cplayer->legs[12], cplayer->legs[13], legr, legg, legb, 255);
 #endif
 				}
 				if(pixel_mode & PMODE_FLAT)
@@ -1774,6 +1921,8 @@ void Renderer::draw_grav()
 
 void Renderer::draw_air()
 {
+	if(!sim->aheat_enable && (display_mode & DISPLAY_AIRH))
+		return;
 #ifndef OGLR
 	if(!(display_mode & DISPLAY_AIR))
 		return;
@@ -1944,7 +2093,7 @@ Renderer::Renderer(Graphics * g, Simulation * sim):
 	g(NULL),
 	zoomWindowPosition(0, 0),
 	zoomScopePosition(0, 0),
-	zoomScopeSize(10),
+	zoomScopeSize(32),
 	ZFACTOR(8),
 	zoomEnabled(false),
 	decorations_enable(1)
@@ -2190,6 +2339,10 @@ void Renderer::AddDisplayMode(unsigned int mode)
 		{
 			return;
 		}
+		if(display_modes[i] & DISPLAY_AIR)
+		{
+			display_modes.erase(display_modes.begin()+i);
+		}
 	}
 	display_modes.push_back(mode);
 	CompileDisplayMode();
@@ -2239,9 +2392,9 @@ Renderer::~Renderer()
 #define PIXELMETHODS_CLASS Renderer
 
 #ifdef OGLR
-#include "OpenGLDrawMethods.inc"
+#include "OpenGLDrawMethods.inl"
 #else
-#include "RasterDrawMethods.inc"
+#include "RasterDrawMethods.inl"
 #endif
 
 #undef PIXELMETHODS_CLASS

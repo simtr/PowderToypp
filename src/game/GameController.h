@@ -55,6 +55,7 @@ public:
 	~GameController();
 	GameView * GetView();
 
+	bool BrushChanged(int brushType, int rx, int ry);
 	bool MouseMove(int x, int y, int dx, int dy);
 	bool MouseDown(int x, int y, unsigned button);
 	bool MouseUp(int x, int y, unsigned button);
@@ -67,7 +68,7 @@ public:
 	void LoadRenderPreset(RenderPreset preset);
 	void SetZoomEnabled(bool zoomEnable);
 	void SetZoomPosition(ui::Point position);
-	void AdjustBrushSize(int direction, bool logarithmic = false);
+	void AdjustBrushSize(int direction, bool logarithmic = false, bool xAxis = false, bool yAxis = false);
 	void AdjustZoomSize(int direction, bool logarithmic = false);
 	void ToolClick(int toolSelection, ui::Point point);
 	void DrawPoints(int toolSelection, queue<ui::Point*> & pointQueue);
@@ -85,9 +86,12 @@ public:
 	void SetActiveTool(int toolSelection, Tool * tool);
 	void SetColour(ui::Colour colour);
 	void SetToolStrength(float value);
+	void LoadSaveFile(SaveFile * file);
 	void OpenSearch();
 	void OpenLogin();
 	void OpenTags();
+	void OpenLocalSaveWindow();
+	void OpenLocalBrowse();
 	void OpenOptions();
 	void OpenRenderOptions();
 	void OpenSaveWindow();

@@ -26,6 +26,7 @@
 #include "GOLMenu.h"
 #include "MenuSection.h"
 #include "client/GameSave.h"
+#include "Sample.h"
 
 #define CHANNELS ((int)(MAX_TEMP-73)/100+2)
 
@@ -54,6 +55,8 @@ public:
 	int grule[NGOL+1][10];
 	menu_section msections[SC_TOTAL];
 
+	int currentTick;
+
 	playerst player;
 	playerst player2;
 	playerst fighters[256]; //255 is the maximum number of fighters
@@ -76,8 +79,8 @@ public:
 	int CGOL;
 	int ISGOL;
 	int GSPEED;
-	unsigned char gol[XRES][YRES];
-	unsigned char gol2[XRES][YRES][NGOL+1];
+	unsigned char gol[YRES][XRES];
+	unsigned char gol2[YRES][XRES][NGOL+1];
 	//Air sim
 	float (*vx)[XRES/CELL];
 	float (*vy)[XRES/CELL];
@@ -117,7 +120,7 @@ public:
 	int Load(int x, int y, GameSave * save);
 	GameSave * Save();
 	GameSave * Save(int x1, int y1, int x2, int y2);
-	Particle Get(int x, int y);
+	SimulationSample Get(int x, int y);
 	inline int is_blocking(int t, int x, int y);
 	inline int is_boundary(int pt, int x, int y);
 	inline int find_next_boundary(int pt, int *x, int *y, int dm, int *em);
@@ -159,6 +162,7 @@ public:
 	void ToolBox(int x1, int y1, int x2, int y2, int tool, Brush * cBrush);
 	
 	void CreateBox(int x1, int y1, int x2, int y2, int c, int flags);
+	int FloodINST(int x, int y, int fullc, int cm);
 	int FloodParts(int x, int y, int c, int cm, int bm, int flags);
 	//Create particles from brush/mask
 	int CreateParts(int positionX, int positionY, int c, Brush * cBrush);
@@ -173,10 +177,12 @@ public:
 	void CreateWallLine(int x1, int y1, int x2, int y2, int rx, int ry, int c, int flags, Brush * cBrush = NULL);
 	
 	void ApplyDecoration(int x, int y, int colR, int colG, int colB, int colA, int mode);
-	void ApplyDecorationPoint(int x, int y, int rx, int ry, int colR, int colG, int colB, int colA, int mode, Brush * cBrush = NULL);
-	void ApplyDecorationLine(int x1, int y1, int x2, int y2, int rx, int ry, int colR, int colG, int colB, int colA, int mode, Brush * cBrush = NULL);
+	void ApplyDecorationPoint(int x, int y, int colR, int colG, int colB, int colA, int mode, Brush * cBrush = NULL);
+	void ApplyDecorationLine(int x1, int y1, int x2, int y2, int colR, int colG, int colB, int colA, int mode, Brush * cBrush = NULL);
 	void ApplyDecorationBox(int x1, int y1, int x2, int y2, int colR, int colG, int colB, int colA, int mode);
 	
+	void GetGravityField(int x, int y, float particleGrav, float newtonGrav, float & pGravX, float & pGravY);
+
 	void *transform_save(void *odata, int *size, matrix2d transform, vector2d translate);
 	inline void orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[]);
 	inline void orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[]);

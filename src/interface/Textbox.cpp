@@ -5,6 +5,7 @@
 #include "interface/Point.h"
 #include "interface/Textbox.h"
 #include "interface/Keys.h"
+#include "ContextMenu.h"
 
 using namespace ui;
 
@@ -13,18 +14,36 @@ Textbox::Textbox(Point position, Point size, std::string textboxText, std::strin
 	actionCallback(NULL),
 	masked(false),
 	border(true),
-	mouseDown(false)
+	mouseDown(false),
+	limit(0)
 {
 	placeHolder = textboxPlaceholder;
 
 	SetText(textboxText);
 	cursor = text.length();
+
+	menu->RemoveItem(0);
+	menu->AddItem(ContextMenuItem("Cut", 1, true));
+	menu->AddItem(ContextMenuItem("Copy", 0, true));
+	menu->AddItem(ContextMenuItem("Paste", 2, true));
 }
 
 Textbox::~Textbox()
 {
 	if(actionCallback)
 		delete actionCallback;
+}
+
+void Textbox::SetHidden(bool hidden)
+{
+	menu->RemoveItem(0);
+	menu->RemoveItem(1);
+	menu->RemoveItem(2);
+	menu->AddItem(ContextMenuItem("Cut", 1, !hidden));
+	menu->AddItem(ContextMenuItem("Copy", 0, !hidden));
+	menu->AddItem(ContextMenuItem("Paste", 2, true));
+
+	masked = hidden;
 }
 
 void Textbox::SetPlaceholder(std::string text)
@@ -65,9 +84,135 @@ std::string Textbox::GetText()
 	return backingText;
 }
 
+void Textbox::OnContextMenuAction(int item)
+{
+	switch(item)
+	{
+	case 0:
+		copySelection();
+		break;
+	case 1:
+		cutSelection();
+		break;
+	case 2:
+		pasteIntoSelection();
+		break;
+	}
+}
+
+void Textbox::cutSelection()
+{
+	char * clipboardText;
+	clipboardText = clipboard_pull_text();
+	std::string newText = std::string(clipboardText);
+	free(clipboardText);
+	if(HasSelection())
+	{
+		if(getLowerSelectionBound() < 0 || getHigherSelectionBound() > backingText.length())
+			return;
+		clipboard_push_text((char*)backingText.substr(getLowerSelectionBound(), getHigherSelectionBound()-getLowerSelectionBound()).c_str());
+		backingText.erase(backingText.begin()+getLowerSelectionBound(), backingText.begin()+getHigherSelectionBound());
+		cursor = getLowerSelectionBound(); 
+	}
+	else
+	{
+		clipboard_push_text((char*)backingText.c_str());
+		backingText.clear();
+	}
+	ClearSelection();
+
+	if(masked)
+	{
+		std::string maskedText = std::string(backingText);
+		std::fill(maskedText.begin(), maskedText.end(), '\x8D');
+		Label::SetText(maskedText);
+	}
+	else
+	{
+		text = backingText;
+	}
+	if(actionCallback)
+		actionCallback->TextChangedCallback(this);
+
+	if(multiline)
+		updateMultiline();
+	updateSelection();
+	TextPosition(text);
+
+	if(cursor)
+	{
+		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+	}
+	else
+	{
+		cursorPositionY = cursorPositionX = 0;
+	}
+}
+
+void Textbox::pasteIntoSelection()
+{
+	char * clipboardText;
+	clipboardText = clipboard_pull_text();
+	std::string newText = std::string(clipboardText);
+	free(clipboardText);
+	if(HasSelection())
+	{
+		if(getLowerSelectionBound() < 0 || getHigherSelectionBound() > backingText.length())
+			return;
+		backingText.erase(backingText.begin()+getLowerSelectionBound(), backingText.begin()+getHigherSelectionBound());
+		cursor = getLowerSelectionBound();
+	}
+	backingText.insert(cursor, newText);
+	cursor = cursor+newText.length();
+	ClearSelection();
+
+	if(masked)
+	{
+		std::string maskedText = std::string(backingText);
+		std::fill(maskedText.begin(), maskedText.end(), '\x8D');
+		Label::SetText(maskedText);
+	}
+	else
+	{
+		text = backingText;
+	}
+	if(actionCallback)
+		actionCallback->TextChangedCallback(this);
+
+	if(multiline)
+		updateMultiline();
+	updateSelection();
+	TextPosition(text);
+
+	if(cursor)
+	{
+		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+	}
+	else
+	{
+		cursorPositionY = cursorPositionX = 0;
+	}
+}
+
 void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
 {
 	bool changed = false;
+	if(ctrl && key == 'c' && !masked)
+	{
+		copySelection();
+		return;
+	}
+	if(ctrl && key == 'v')
+	{
+		pasteIntoSelection();
+		return;
+	}
+	if(ctrl && key == 'x' && !masked)
+	{
+		cutSelection();
+		return;
+	}
+
 	try
 	{
 		switch(key)
@@ -190,15 +335,19 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 
 void Textbox::OnMouseClick(int x, int y, unsigned button)
 {
-	mouseDown = true;
-	cursor = Graphics::CharIndexAtPosition(multiline?((char*)textLines.c_str()):((char*)text.c_str()), x-textPosition.X, y-textPosition.Y);
-	if(cursor)
+
+	if(button != BUTTON_RIGHT)
 	{
-		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
-	}
-	else
-	{
-		cursorPositionY = cursorPositionX = 0;
+		mouseDown = true;
+		cursor = Graphics::CharIndexAtPosition(multiline?((char*)textLines.c_str()):((char*)text.c_str()), x-textPosition.X, y-textPosition.Y);
+		if(cursor)
+		{
+			Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
+		}
+		else
+		{
+			cursorPositionY = cursorPositionX = 0;
+		}
 	}
 	Label::OnMouseClick(x, y, button);
 }
@@ -234,7 +383,7 @@ void Textbox::Draw(const Point& screenPos)
 	if(IsFocused())
 	{
 		if(border) g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 255, 255, 255, 255);
-		g->draw_line(screenPos.X+textPosition.X+cursorPositionX+1, screenPos.Y-2+textPosition.Y+cursorPositionY, screenPos.X+textPosition.X+cursorPositionX+1, screenPos.Y+10+textPosition.Y+cursorPositionY, 255, 255, 255, XRES+BARSIZE);
+		g->draw_line(screenPos.X+textPosition.X+cursorPositionX, screenPos.Y-2+textPosition.Y+cursorPositionY, screenPos.X+textPosition.X+cursorPositionX, screenPos.Y+10+textPosition.Y+cursorPositionY, 255, 255, 255, 255);
 	}
 	else
 	{
