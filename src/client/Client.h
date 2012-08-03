@@ -42,6 +42,7 @@ public:
 	UpdateInfo(int time, std::string file, BuildType type) : Major(0), Minor(0), Build(0), Time(time), File(file), Type(type) {}
 };
 
+class ThumbnailListener;
 class ClientListener;
 class Client: public Singleton<Client> {
 private:
@@ -74,6 +75,7 @@ private:
 	//Config file handle
 	json::Object configDocument;
 public:
+
 	vector<ClientListener*> listeners;
 
 	UpdateInfo GetUpdateInfo();
@@ -86,11 +88,15 @@ public:
 
 	std::vector<unsigned char> ReadFile(std::string filename);
 
+	void WriteFile(std::vector<unsigned char> fileData, std::string filename);
+	void WriteFile(std::vector<char> fileData, std::string filename);
+	bool FileExists(std::string filename);
+
 	void AddListener(ClientListener * listener);
 	void RemoveListener(ClientListener * listener);
 
 	RequestStatus ExecVote(int saveID, int direction);
-	RequestStatus UploadSave(SaveInfo * save);
+	RequestStatus UploadSave(SaveInfo & save);
 
 	SaveFile * GetStamp(string stampID);
 	void DeleteStamp(string stampID);

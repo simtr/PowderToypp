@@ -40,6 +40,8 @@ private:
 	bool drawSnap;
 	bool shiftBehaviour;
 	bool ctrlBehaviour;
+	bool altBehaviour;
+	bool showHud;
 	int toolIndex;
 
 	int infoTipPresence;
@@ -108,6 +110,8 @@ private:
 	void disableShiftBehaviour();
 	void enableCtrlBehaviour();
 	void disableCtrlBehaviour();
+	void enableAltBehaviour();
+	void disableAltBehaviour();
 public:
     GameView();
 
@@ -144,6 +148,9 @@ public:
 	virtual void OnMouseWheel(int x, int y, int d);
 	virtual void OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 	virtual void OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt);
+	virtual void OnTick(float dt);
+	virtual void OnDraw();
+	virtual void OnBlur();
 
 	//Top-level handers, for Lua interface
 	virtual void DoDraw();
@@ -154,10 +161,6 @@ public:
 	virtual void DoKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 	virtual void DoKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 
-	//virtual void OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt) {}
-	//virtual void OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt) {}
-	virtual void OnTick(float dt);
-	virtual void OnDraw();
 	class MenuAction;
 	class ToolAction;
 };

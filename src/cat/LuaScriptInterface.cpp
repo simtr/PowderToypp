@@ -543,6 +543,8 @@ int luacon_element_getproperty(char * key, int * format, unsigned int * modified
 	if (strcmp(key, "name")==0){
 		offset = offsetof(Element, Name);
 		*format = 2;
+		if(modified_stuff)
+			*modified_stuff |= LUACON_EL_MODIFIED_MENUS;
 	}
 	else if (strcmp(key, "color")==0){
 		offset = offsetof(Element, Colour);
@@ -651,6 +653,8 @@ int luacon_element_getproperty(char * key, int * format, unsigned int * modified
 	else if (strcmp(key, "description")==0){
 		offset = offsetof(Element, Description);
 		*format = 2;
+		if(modified_stuff)
+			*modified_stuff |= LUACON_EL_MODIFIED_MENUS;
 	}
 	else {
 		return -1;
@@ -761,8 +765,8 @@ int luacon_elementwrite(lua_State* l){
 	}
 	if (modified_stuff)
 	{
-		//if (modified_stuff & LUACON_EL_MODIFIED_MENUS)
-			//luacon_model->notifyMenuListChanged();
+		if (modified_stuff & LUACON_EL_MODIFIED_MENUS)
+			luacon_model->BuildMenus();
 		if (modified_stuff & LUACON_EL_MODIFIED_CANMOVE)
 			luacon_sim->init_can_move();
 		if (modified_stuff & LUACON_EL_MODIFIED_GRAPHICS)
@@ -1514,7 +1518,7 @@ int luatpt_drawrect(lua_State* l)
 	if (a<0) a = 0;
 	if (a>255) a = 255;
 	luacon_g->drawrect(x, y, w, h, r, g, b, a);
-	return luaL_error(l, "Screen buffer does not exist");
+	return 0;
 }
 
 int luatpt_fillrect(lua_State* l)
@@ -1544,7 +1548,7 @@ int luatpt_fillrect(lua_State* l)
 	if (a<0) a = 0;
 	if (a>255) a = 255;
 	luacon_g->fillrect(x, y, w, h, r, g, b, a);
-	return luaL_error(l, "Screen buffer does not exist");
+	return 0;
 }
 
 int luatpt_drawline(lua_State* l)
@@ -1569,7 +1573,7 @@ int luatpt_drawline(lua_State* l)
 	if (a<0) a = 0;
 	if (a>255) a = 255;
 	luacon_g->draw_line(x1, y1, x2, y2, r, g, b, a);
-	return luaL_error(l, "Screen buffer does not exist");
+	return 0;
 }
 
 int luatpt_textwidth(lua_State* l)

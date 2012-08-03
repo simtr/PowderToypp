@@ -39,7 +39,8 @@ GameView::GameView():
 	infoTipPresence(0),
 	toolTipPosition(-1, -1),
 	shiftBehaviour(false),
-	ctrlBehaviour(false)
+	ctrlBehaviour(false),
+	showHud(true)
 {
 	
 	int currentX = 1;
@@ -252,21 +253,29 @@ GameView::GameView():
 	colourRSlider->SetActionCallback(new ColourChange(this));
 	colourRValue = new ui::Textbox(ui::Point(60, Size.Y-41), ui::Point(25, 17), "255");
 	colourRValue->SetActionCallback(new ColourChange(this));
+	colourRValue->SetLimit(3);
+	colourRValue->SetInputType(ui::Textbox::Number);
 
 	colourGSlider = new ui::Slider(ui::Point(95, Size.Y-39), ui::Point(50, 14), 255);
 	colourGSlider->SetActionCallback(new ColourChange(this));
 	colourGValue = new ui::Textbox(ui::Point(150, Size.Y-41), ui::Point(25, 17), "255");
 	colourGValue->SetActionCallback(new ColourChange(this));
+	colourGValue->SetLimit(3);
+	colourGValue->SetInputType(ui::Textbox::Number);
 
 	colourBSlider = new ui::Slider(ui::Point(185, Size.Y-39), ui::Point(50, 14), 255);
 	colourBSlider->SetActionCallback(new ColourChange(this));
 	colourBValue = new ui::Textbox(ui::Point(240, Size.Y-41), ui::Point(25, 17), "255");
 	colourBValue->SetActionCallback(new ColourChange(this));
+	colourBValue->SetLimit(3);
+	colourBValue->SetInputType(ui::Textbox::Number);
 
 	colourASlider = new ui::Slider(ui::Point(275, Size.Y-39), ui::Point(50, 14), 255);
 	colourASlider->SetActionCallback(new ColourChange(this));
 	colourAValue = new ui::Textbox(ui::Point(330, Size.Y-41), ui::Point(25, 17), "255");
 	colourAValue->SetActionCallback(new ColourChange(this));
+	colourAValue->SetLimit(3);
+	colourAValue->SetInputType(ui::Textbox::Number);
 
 	class ElementSearchAction : public ui::ButtonAction
 	{
@@ -900,6 +909,7 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	{
 	case KEY_ALT:
 		drawSnap = true;
+		enableAltBehaviour();
 		break;
 	case KEY_CTRL:
 		if(drawModeReset)
@@ -943,6 +953,9 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	case 'f':
 		c->FrameStep();
 		break;
+	case 'h':
+		showHud = !showHud;
+		break;
 	case 'b':
 		if(ctrl)
 			c->SetDecoration();
@@ -977,10 +990,10 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 		c->OpenStamps();
 		break;
 	case ']':
-		c->AdjustBrushSize(1, true, shiftBehaviour, ctrlBehaviour);
+		c->AdjustBrushSize(1, !alt, shiftBehaviour, ctrlBehaviour);
 		break;
 	case '[':
-		c->AdjustBrushSize(-1, true, shiftBehaviour, ctrlBehaviour);
+		c->AdjustBrushSize(-1, !alt, shiftBehaviour, ctrlBehaviour);
 		break;
 	}
 
@@ -1007,6 +1020,7 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 	{
 	case KEY_ALT:
 		drawSnap = false;
+		disableAltBehaviour();
 		break;
 	case KEY_CTRL:
 		disableCtrlBehaviour();
@@ -1019,6 +1033,13 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 			c->SetZoomEnabled(false);
 		break;
 	}
+}
+
+void GameView::OnBlur()
+{
+	disableAltBehaviour();
+	disableCtrlBehaviour();
+	disableShiftBehaviour();
 }
 
 void GameView::OnTick(float dt)
@@ -1252,6 +1273,22 @@ void GameView::disableShiftBehaviour()
 	}
 }
 
+void GameView::enableAltBehaviour()
+{
+	if(!altBehaviour)
+	{
+		altBehaviour = true;
+	}
+}
+
+void GameView::disableAltBehaviour()
+{
+	if(altBehaviour)
+	{
+		altBehaviour = false;
+	}
+}
+
 void GameView::enableCtrlBehaviour()
 {
 	if(!ctrlBehaviour)
@@ -1390,34 +1427,37 @@ void GameView::OnDraw()
 		}
 	}
 
-	//Draw info about simulation under cursor
-	std::stringstream sampleInfo;
-	sampleInfo.precision(2);
-	if(sample.particle.type)
-		sampleInfo << c->ElementResolve(sample.particle.type) << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
-	else
-		sampleInfo << "Empty";
+	if(showHud)
+	{
+		//Draw info about simulation under cursor
+		std::stringstream sampleInfo;
+		sampleInfo.precision(2);
+		if(sample.particle.type)
+			sampleInfo << c->ElementResolve(sample.particle.type) << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
+		else
+			sampleInfo << "Empty";
 
-	sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
+		sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 
-	int textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
-	g->fillrect(XRES-20-textWidth, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
-	g->drawtext(XRES-16-textWidth, 16, (const char*)sampleInfo.str().c_str(), 255, 255, 255, 255*0.75);
+		int textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
+		g->fillrect(XRES-20-textWidth, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
+		g->drawtext(XRES-16-textWidth, 16, (const char*)sampleInfo.str().c_str(), 255, 255, 255, 255*0.75);
 
 
-	//FPS and some version info
+		//FPS and some version info
 #ifndef DEBUG //In debug mode, the Engine will draw FPS and other info instead
-	std::stringstream fpsInfo;
-	fpsInfo.precision(2);
+		std::stringstream fpsInfo;
+		fpsInfo.precision(2);
 #ifdef SNAPSHOT
-	fpsInfo << "Snapshot " << SNAPSHOT_ID << ". ";
+		fpsInfo << "Snapshot " << SNAPSHOT_ID << ". ";
 #endif
-	fpsInfo << "FPS: " << std::fixed << ui::Engine::Ref().GetFps();
+		fpsInfo << "FPS: " << std::fixed << ui::Engine::Ref().GetFps();
 
-	textWidth = Graphics::textwidth((char*)fpsInfo.str().c_str());
-	g->fillrect(12, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
-	g->drawtext(16, 16, (const char*)fpsInfo.str().c_str(), 32, 216, 255, 255*0.75);
+		textWidth = Graphics::textwidth((char*)fpsInfo.str().c_str());
+		g->fillrect(12, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
+		g->drawtext(16, 16, (const char*)fpsInfo.str().c_str(), 32, 216, 255, 255*0.75);
 #endif
+	}
 
 	//Tooltips
 	if(infoTipPresence)
