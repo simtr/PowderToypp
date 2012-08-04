@@ -9,7 +9,7 @@
 //#define CONFIG_H_
 
 
-#ifdef WIN32
+#ifdef WIN
 #define PATH_SEP "\\"
 #else
 #define PATH_SEP "/"
@@ -44,14 +44,20 @@
 #define IDENT_RELTYPE "R"
 #endif
 
-#ifdef WIN32
+#if defined(WIN)
+#if defined(_64BIT)
+#define IDENT_PLATFORM "WIN64"
+#else
 #define IDENT_PLATFORM "WIN32"
+#endif
+#elif defined(LIN)
+#if defined(_64BIT)
+#define IDENT_PLATFORM "LIN64"
+#else
+#define IDENT_PLATFORM "LIN32"
+#endif
 #elif defined(MACOSX)
 #define IDENT_PLATFORM "MACOSX"
-#elif defined(LIN32)
-#define IDENT_PLATFORM "LIN32"
-#elif defined(LIN64)
-#define IDENT_PLATFORM "LIN64"
 #else
 #define IDENT_PLATFORM "UNKNOWN"
 #endif
@@ -171,17 +177,17 @@ extern unsigned char ZSIZE;
 #define GLASS_IOR      1.9
 #define GLASS_DISP     0.07
 
-#ifdef WIN32
+#ifdef WIN
 #define strcasecmp stricmp
 #endif
-#if defined(WIN32) && !defined(__GNUC__)
+#if defined(WIN) && !defined(__GNUC__)
 #define fmin min
 #define fminf min
 #define fmax max
 #define fmaxf max
 #endif
 
-#if defined(WIN32) && !defined(__GNUC__)
+#if defined(WIN) && !defined(__GNUC__)
 #define TPT_INLINE _inline
 #else
 #define TPT_INLINE inline

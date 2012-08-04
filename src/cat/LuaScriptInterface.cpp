@@ -8,13 +8,15 @@
 #include <string>
 #include "Config.h"
 #include "LuaScriptInterface.h"
+#include "TPTScriptInterface.h"
 #include "simulation/Simulation.h"
 #include "game/GameModel.h"
 #include "LuaScriptHelper.h"
 
 LuaScriptInterface::LuaScriptInterface(GameModel * m):
 	CommandInterface(m),
-	currentCommand(false)
+	currentCommand(false),
+	legacy(new TPTScriptInterface(m))
 {
 	int i = 0, j;
 	char tmpname[12];
@@ -284,16 +286,26 @@ void LuaScriptInterface::OnTick()
 
 int LuaScriptInterface::Command(std::string command)
 {
-	int ret;
-	lastError = "";
-	currentCommand = true;
-	if((ret = luaL_dostring(l, command.c_str())))
+	if(command[0] == '!')
 	{
-		lastError = luacon_geterror();
-		//Log(LogError, lastError);
+		lastError = "";
+		int ret = legacy->Command(command.substr(1));
+		lastError = legacy->GetLastError();
+		return ret;
 	}
-	currentCommand = false;
-	return ret;
+	else
+	{
+		int ret;
+		lastError = "";
+		currentCommand = true;
+		if((ret = luaL_dostring(l, command.c_str())))
+		{
+			lastError = luacon_geterror();
+			//Log(LogError, lastError);
+		}
+		currentCommand = false;
+		return ret;
+	}
 }
 
 std::string LuaScriptInterface::FormatCommand(std::string command)
@@ -302,7 +314,7 @@ std::string LuaScriptInterface::FormatCommand(std::string command)
 }
 
 LuaScriptInterface::~LuaScriptInterface() {
-	// TODO Auto-generated destructor stub
+	delete legacy;
 }
 
 #ifndef FFI
@@ -543,6 +555,8 @@ int luacon_element_getproperty(char * key, int * format, unsigned int * modified
 	if (strcmp(key, "name")==0){
 		offset = offsetof(Element, Name);
 		*format = 2;
+		if(modified_stuff)
+			*modified_stuff |= LUACON_EL_MODIFIED_MENUS;
 	}
 	else if (strcmp(key, "color")==0){
 		offset = offsetof(Element, Colour);
@@ -651,6 +665,8 @@ int luacon_element_getproperty(char * key, int * format, unsigned int * modified
 	else if (strcmp(key, "description")==0){
 		offset = offsetof(Element, Description);
 		*format = 2;
+		if(modified_stuff)
+			*modified_stuff |= LUACON_EL_MODIFIED_MENUS;
 	}
 	else {
 		return -1;
@@ -761,8 +777,8 @@ int luacon_elementwrite(lua_State* l){
 	}
 	if (modified_stuff)
 	{
-		//if (modified_stuff & LUACON_EL_MODIFIED_MENUS)
-			//luacon_model->notifyMenuListChanged();
+		if (modified_stuff & LUACON_EL_MODIFIED_MENUS)
+			luacon_model->BuildMenus();
 		if (modified_stuff & LUACON_EL_MODIFIED_CANMOVE)
 			luacon_sim->init_can_move();
 		if (modified_stuff & LUACON_EL_MODIFIED_GRAPHICS)
@@ -1514,7 +1530,7 @@ int luatpt_drawrect(lua_State* l)
 	if (a<0) a = 0;
 	if (a>255) a = 255;
 	luacon_g->drawrect(x, y, w, h, r, g, b, a);
-	return luaL_error(l, "Screen buffer does not exist");
+	return 0;
 }
 
 int luatpt_fillrect(lua_State* l)
@@ -1544,7 +1560,7 @@ int luatpt_fillrect(lua_State* l)
 	if (a<0) a = 0;
 	if (a>255) a = 255;
 	luacon_g->fillrect(x, y, w, h, r, g, b, a);
-	return luaL_error(l, "Screen buffer does not exist");
+	return 0;
 }
 
 int luatpt_drawline(lua_State* l)
@@ -1569,7 +1585,7 @@ int luatpt_drawline(lua_State* l)
 	if (a<0) a = 0;
 	if (a>255) a = 255;
 	luacon_g->draw_line(x1, y1, x2, y2, r, g, b, a);
-	return luaL_error(l, "Screen buffer does not exist");
+	return 0;
 }
 
 int luatpt_textwidth(lua_State* l)
@@ -1971,7 +1987,7 @@ int luatpt_getscript(lua_State* l)
 	filename = (char*)malloc(strlen(fileauthor)+strlen(fileid)+strlen(PATH_SEP)+strlen(LOCAL_LUA_DIR)+6);
 	sprintf(filename, LOCAL_LUA_DIR PATH_SEP "%s_%s.lua", fileauthor, fileid);
 
-#ifdef WIN32
+#ifdef WIN
 	_mkdir(LOCAL_LUA_DIR);
 #else
 	mkdir(LOCAL_LUA_DIR, 0755);

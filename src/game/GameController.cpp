@@ -17,6 +17,8 @@
 #include "update/UpdateActivity.h"
 #include "Notification.h"
 #include "filebrowser/FileBrowserActivity.h"
+#include "save/LocalSaveActivity.h"
+#include "save/ServerSaveActivity.h"
 
 using namespace std;
 
@@ -72,22 +74,7 @@ public:
 	OptionsCallback(GameController * cc_) { cc = cc_; }
 	virtual void ControllerExit()
 	{
-		//cc->gameModel->SetUser(cc->loginWindow->GetUser());
-	}
-};
-
-class GameController::SSaveCallback: public ControllerCallback
-{
-	GameController * cc;
-public:
-	SSaveCallback(GameController * cc_) { cc = cc_; }
-	virtual void ControllerExit()
-	{
-		if(cc->ssave->GetSaveUploaded())
-		{
-			cc->gameModel->SetSave(new SaveInfo(*(cc->ssave->GetSave())));
-
-		}
+		cc->gameModel->UpdateQuickOptions();
 		//cc->gameModel->SetUser(cc->loginWindow->GetUser());
 	}
 };
@@ -122,7 +109,6 @@ GameController::GameController():
 		search(NULL),
 		renderOptions(NULL),
 		loginWindow(NULL),
-		ssave(NULL),
 		console(NULL),
 		tagsWindow(NULL),
 		options(NULL),
@@ -193,7 +179,7 @@ void GameController::AdjustBrushSize(int direction, bool logarithmic, bool xAxis
 	ui::Point newSize(0, 0);
 	ui::Point oldSize = gameModel->GetBrush()->GetRadius();
 	if(logarithmic)
-		newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction * ((gameModel->GetBrush()->GetRadius().X/10)>0?gameModel->GetBrush()->GetRadius().X/10:1), direction * ((gameModel->GetBrush()->GetRadius().Y/10)>0?gameModel->GetBrush()->GetRadius().Y/10:1));
+		newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction * ((gameModel->GetBrush()->GetRadius().X/5)>0?gameModel->GetBrush()->GetRadius().X/5:1), direction * ((gameModel->GetBrush()->GetRadius().Y/5)>0?gameModel->GetBrush()->GetRadius().Y/5:1));
 	else
 		newSize = gameModel->GetBrush()->GetRadius() + ui::Point(direction, direction);
 	if(newSize.X<0)
@@ -420,6 +406,76 @@ void GameController::Exit()
 	HasDone = true;
 }
 
+void GameController::ResetAir()
+{
+	gameModel->GetSimulation()->air->Clear();
+}
+
+void GameController::ResetSpark()
+{
+	Simulation * sim = gameModel->GetSimulation();
+	for (int i = 0; i < NPART; i++)
+		if (sim->parts[i].type == PT_SPRK)
+		{
+			if (sim->parts[i].ctype >= 0 && sim->parts[i].ctype < PT_NUM && sim->elements[sim->parts[i].ctype].Enabled)
+			{
+				sim->parts[i].type = sim->parts[i].ctype;
+				sim->parts[i].life = 0;
+			}
+			else
+				sim->kill_part(i);
+		}
+}
+
+void GameController::SwitchGravity()
+{
+	gameModel->GetSimulation()->gravityMode = (gameModel->GetSimulation()->gravityMode+1)%3;
+
+	switch (gameModel->GetSimulation()->gravityMode)
+	{
+	case 0:
+		gameModel->SetInfoTip("Gravity: Vertical");
+		break;
+	case 1:
+		gameModel->SetInfoTip("Gravity: Off");
+		break;
+	case 2:
+		gameModel->SetInfoTip("Gravity: Radial");
+		break;
+	}
+}
+
+void GameController::SwitchAir()
+{
+	gameModel->GetSimulation()->air->airMode = (gameModel->GetSimulation()->air->airMode+1)%5;
+
+	switch (gameModel->GetSimulation()->air->airMode)
+	{
+	case 0:
+		gameModel->SetInfoTip("Air: On");
+		break;
+	case 1:
+		gameModel->SetInfoTip("Air: Pressure Off");
+		break;
+	case 2:
+		gameModel->SetInfoTip("Air: Velocity Off");
+		break;
+	case 3:
+		gameModel->SetInfoTip("Air: Off");
+		break;
+	case 4:
+		gameModel->SetInfoTip("Air: No Update");
+		break;
+	}
+}
+
+void GameController::ToggleAHeat()
+{
+	gameModel->GetSimulation()->aheat_enable = !gameModel->GetSimulation()->aheat_enable;
+	gameModel->UpdateQuickOptions();
+}
+
+
 void GameController::LoadRenderPreset(RenderPreset preset)
 {
 	Renderer * renderer = gameModel->GetRenderer();
@@ -537,12 +593,35 @@ void GameController::OpenSearch()
 
 void GameController::OpenLocalSaveWindow()
 {
-
+	Simulation * sim = gameModel->GetSimulation();
+	GameSave * gameSave = sim->Save();
+	gameSave->paused = gameModel->GetPaused();
+	gameSave->gravityMode = sim->gravityMode;
+	gameSave->airMode = sim->air->airMode;
+	gameSave->legacyEnable = sim->legacy_enable;
+	gameSave->waterEEnabled = sim->water_equal_test;
+	gameSave->gravityEnable = sim->grav->ngrav_enable;
+	if(!gameSave)
+	{
+		new ErrorMessage("Error", "Unable to build save.");
+	}
+	else
+	{
+		SaveFile tempSave("");
+		tempSave.SetGameSave(gameSave);
+		new LocalSaveActivity(tempSave);
+	}
 }
 
 void GameController::LoadSaveFile(SaveFile * file)
 {
 	gameModel->SetSaveFile(file);
+}
+
+
+void GameController::LoadSave(SaveInfo * save)
+{
+	gameModel->SetSave(save);
 }
 
 void GameController::OpenLocalBrowse()
@@ -579,7 +658,7 @@ void GameController::OpenElementSearch()
 			continue;
 		toolList.insert(toolList.end(), menuToolList.begin(), menuToolList.end());
 	}
-	ui::Engine::Ref().ShowWindow(new ElementSearchActivity(gameModel, toolList));
+	new ElementSearchActivity(gameModel, toolList);
 }
 
 void GameController::OpenTags()
@@ -630,6 +709,17 @@ void GameController::OpenRenderOptions()
 
 void GameController::OpenSaveWindow()
 {
+	class SaveUploadedCallback: public ServerSaveActivity::SaveUploadedCallback
+	{
+		GameController * c;
+	public:
+		SaveUploadedCallback(GameController * _c): c(_c) {}
+		virtual  ~SaveUploadedCallback() {};
+		virtual void SaveUploaded(SaveInfo save)
+		{
+			c->LoadSave(&save);
+		}
+	};
 	if(gameModel->GetUser().ID)
 	{
 		Simulation * sim = gameModel->GetSimulation();
@@ -650,15 +740,14 @@ void GameController::OpenSaveWindow()
 			{
 				SaveInfo tempSave(*gameModel->GetSave());
 				tempSave.SetGameSave(gameSave);
-				ssave = new SSaveController(new SSaveCallback(this), tempSave);
+				new ServerSaveActivity(tempSave, new SaveUploadedCallback(this));
 			}
 			else
 			{				
 				SaveInfo tempSave(0, 0, 0, 0, gameModel->GetUser().Username, "");
 				tempSave.SetGameSave(gameSave);
-				ssave = new SSaveController(new SSaveCallback(this), tempSave);
+				new ServerSaveActivity(tempSave, new SaveUploadedCallback(this));
 			}
-			ui::Engine::Ref().ShowWindow(ssave->GetView());
 		}
 	}
 	else

@@ -35,6 +35,11 @@ void Label::SetMultiline(bool status)
 	{
 		updateMultiline();
 		updateSelection();
+		TextPosition(textLines);
+	}
+	else
+	{
+		TextPosition(text);
 	}
 }
 
@@ -45,8 +50,12 @@ void Label::SetText(std::string text)
 	{
 		updateMultiline();
 		updateSelection();
+		TextPosition(textLines);
 	}
-	TextPosition(text);
+	else
+	{
+		TextPosition(text);
+	}
 }
 
 void Label::updateMultiline()
@@ -68,11 +77,14 @@ void Label::updateMultiline()
 			if(nextSpace)
 				nextSpace[0] = 0;
 			int width = Graphics::textwidth(currentWord);
-			if(width+currentWidth > Size.X-6)
+			if(width+currentWidth >= Size.X-(Appearance.Margin.Left+Appearance.Margin.Right))
 			{
 				currentWidth = width;
-				currentWord[0] = '\n';
-				lines++;
+				if(currentWord!=rawText)
+				{
+					currentWord[0] = '\n';
+					lines++;
+				}
 			}
 			else
 				currentWidth += width;
@@ -118,7 +130,7 @@ void Label::OnMouseClick(int x, int y, unsigned button)
 	if(button == BUTTON_RIGHT)
 	{
 		if(menu)
-			menu->Show(GetParentWindow()->Position + Position + ui::Point(x, y));
+			menu->Show(GetScreenPos() + ui::Point(x, y));
 	}
 	else
 	{

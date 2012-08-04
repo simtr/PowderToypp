@@ -12,6 +12,7 @@
 #include "interface/Slider.h"
 #include "search/Thumbnail.h"
 #include "simulation/SaveRenderer.h"
+#include "QuickOption.h"
 
 GameView::GameView():
 	ui::Window(ui::Point(0, 0), ui::Point(XRES+BARSIZE, YRES+MENUSIZE)),
@@ -39,7 +40,8 @@ GameView::GameView():
 	infoTipPresence(0),
 	toolTipPosition(-1, -1),
 	shiftBehaviour(false),
-	ctrlBehaviour(false)
+	ctrlBehaviour(false),
+	showHud(true)
 {
 	
 	int currentX = 1;
@@ -233,25 +235,48 @@ GameView::GameView():
 	pauseButton->SetActionCallback(new PauseAction(this));
 	AddComponent(pauseButton);
 
-	class ColourChange : public ui::SliderAction
+	class ColourChange : public ui::SliderAction, public ui::TextboxAction
 	{
 		GameView * v;
 	public:
 		ColourChange(GameView * _v) { v = _v; }
 		void ValueChangedCallback(ui::Slider * sender)
 		{
-			v->changeColour();
+			v->changeColourSlider();
+		}
+
+		void TextChangedCallback(ui::Textbox * sender)
+		{
+			v->changeColourText();
 		}
 	};
-	ColourChange * colC = new ColourChange(this);
-	colourRSlider = new ui::Slider(ui::Point(5, Size.Y-39), ui::Point(80, 14), 255);
-	colourRSlider->SetActionCallback(colC);
-	colourGSlider = new ui::Slider(ui::Point(95, Size.Y-39), ui::Point(80, 14), 255);
-	colourGSlider->SetActionCallback(colC);
-	colourBSlider = new ui::Slider(ui::Point(185, Size.Y-39), ui::Point(80, 14), 255);
-	colourBSlider->SetActionCallback(colC);
+	colourRSlider = new ui::Slider(ui::Point(5, Size.Y-39), ui::Point(50, 14), 255);
+	colourRSlider->SetActionCallback(new ColourChange(this));
+	colourRValue = new ui::Textbox(ui::Point(60, Size.Y-41), ui::Point(25, 17), "255");
+	colourRValue->SetActionCallback(new ColourChange(this));
+	colourRValue->SetLimit(3);
+	colourRValue->SetInputType(ui::Textbox::Number);
+
+	colourGSlider = new ui::Slider(ui::Point(95, Size.Y-39), ui::Point(50, 14), 255);
+	colourGSlider->SetActionCallback(new ColourChange(this));
+	colourGValue = new ui::Textbox(ui::Point(150, Size.Y-41), ui::Point(25, 17), "255");
+	colourGValue->SetActionCallback(new ColourChange(this));
+	colourGValue->SetLimit(3);
+	colourGValue->SetInputType(ui::Textbox::Number);
+
+	colourBSlider = new ui::Slider(ui::Point(185, Size.Y-39), ui::Point(50, 14), 255);
+	colourBSlider->SetActionCallback(new ColourChange(this));
+	colourBValue = new ui::Textbox(ui::Point(240, Size.Y-41), ui::Point(25, 17), "255");
+	colourBValue->SetActionCallback(new ColourChange(this));
+	colourBValue->SetLimit(3);
+	colourBValue->SetInputType(ui::Textbox::Number);
+
 	colourASlider = new ui::Slider(ui::Point(275, Size.Y-39), ui::Point(50, 14), 255);
-	colourASlider->SetActionCallback(colC);
+	colourASlider->SetActionCallback(new ColourChange(this));
+	colourAValue = new ui::Textbox(ui::Point(330, Size.Y-41), ui::Point(25, 17), "255");
+	colourAValue->SetActionCallback(new ColourChange(this));
+	colourAValue->SetLimit(3);
+	colourAValue->SetInputType(ui::Textbox::Number);
 
 	class ElementSearchAction : public ui::ButtonAction
 	{
@@ -338,6 +363,33 @@ public:
 	}
 };
 
+class GameView::OptionAction: public ui::ButtonAction
+{
+	QuickOption * option;
+public:
+	OptionAction(QuickOption * _option) { option = _option; }
+	void ActionCallback(ui::Button * sender)
+	{
+		option->Perform();
+	}
+};
+
+class GameView::OptionListener: public QuickOptionListener
+{
+	ui::Button * button;
+public:
+	OptionListener(ui::Button * _button) { button = _button; }
+	virtual void OnValueChanged(QuickOption * option)
+	{
+		switch(option->GetType())
+		{
+		case QuickOption::Toggle:
+			button->SetTogglable(true);
+			button->SetToggleState(option->GetToggle());
+		}
+	}
+};
+
 class GameView::ToolAction: public ui::ButtonAction
 {
 	GameView * v;
@@ -351,6 +403,31 @@ public:
 			v->c->SetActiveTool(sender->GetSelectionState(), tool);
 	}
 };
+
+void GameView::NotifyQuickOptionsChanged(GameModel * sender)
+{
+	for(int i = 0; i < quickOptionButtons.size(); i++)
+	{
+		RemoveComponent(quickOptionButtons[i]);
+		delete quickOptionButtons[i];
+	}
+
+	int currentY = 1;
+	vector<QuickOption*> optionList = sender->GetQuickOptions();
+	for(vector<QuickOption*>::iterator iter = optionList.begin(), end = optionList.end(); iter != end; ++iter)
+	{
+		QuickOption * option = *iter;
+		ui::Button * tempButton = new ui::Button(ui::Point(XRES+BARSIZE-16, currentY), ui::Point(15, 15), option->GetIcon(), option->GetDescription());
+		//tempButton->Appearance.Margin = ui::Border(0, 2, 3, 2);
+		tempButton->SetTogglable(true);
+		tempButton->SetActionCallback(new OptionAction(option));
+		option->AddListener(new OptionListener(tempButton));
+		AddComponent(tempButton);
+
+		quickOptionButtons.push_back(tempButton);
+		currentY += 16;
+	}
+}
 
 void GameView::NotifyMenuListChanged(GameModel * sender)
 {
@@ -487,32 +564,69 @@ void GameView::NotifyColourSelectorVisibilityChanged(GameModel * sender)
 {
 	RemoveComponent(colourRSlider);
 	colourRSlider->SetParentWindow(NULL);
+	RemoveComponent(colourRValue);
+	colourRValue->SetParentWindow(NULL);
+
 	RemoveComponent(colourGSlider);
 	colourGSlider->SetParentWindow(NULL);
+	RemoveComponent(colourGValue);
+	colourGValue->SetParentWindow(NULL);
+
 	RemoveComponent(colourBSlider);
 	colourBSlider->SetParentWindow(NULL);
+	RemoveComponent(colourBValue);
+	colourBValue->SetParentWindow(NULL);
+
 	RemoveComponent(colourASlider);
 	colourASlider->SetParentWindow(NULL);
+	RemoveComponent(colourAValue);
+	colourAValue->SetParentWindow(NULL);
+
 	if(sender->GetColourSelectorVisibility())
 	{
 		AddComponent(colourRSlider);
+		AddComponent(colourRValue);
+
 		AddComponent(colourGSlider);
+		AddComponent(colourGValue);
+
 		AddComponent(colourBSlider);
+		AddComponent(colourBValue);
+
 		AddComponent(colourASlider);
+		AddComponent(colourAValue);
 	}
 
 }
 
 void GameView::NotifyColourSelectorColourChanged(GameModel * sender)
 {
+	std::string intR, intG, intB, intA;
+
+	intR = NumberToString<int>(sender->GetColourSelectorColour().Red);
+	intG = NumberToString<int>(sender->GetColourSelectorColour().Green);
+	intB = NumberToString<int>(sender->GetColourSelectorColour().Blue);
+	intA = NumberToString<int>(sender->GetColourSelectorColour().Alpha);
+
 	colourRSlider->SetValue(sender->GetColourSelectorColour().Red);
-	colourRSlider->SetColour(ui::Colour(0, sender->GetColourSelectorColour().Green, sender->GetColourSelectorColour().Blue), ui::Colour(255, sender->GetColourSelectorColour().Green, sender->GetColourSelectorColour().Blue));
+	colourRSlider->SetColour(ui::Colour(0, 0, 0), ui::Colour(255, 0, 0));
+	if(!colourRValue->IsFocused())
+		colourRValue->SetText(intR);
+
 	colourGSlider->SetValue(sender->GetColourSelectorColour().Green);
-	colourGSlider->SetColour(ui::Colour(sender->GetColourSelectorColour().Red, 0, sender->GetColourSelectorColour().Blue), ui::Colour(sender->GetColourSelectorColour().Red, 255, sender->GetColourSelectorColour().Blue));
+	colourGSlider->SetColour(ui::Colour(0, 0, 0), ui::Colour(0, 255, 0));
+	if(!colourGValue->IsFocused())
+		colourGValue->SetText(intG);
+
 	colourBSlider->SetValue(sender->GetColourSelectorColour().Blue);
-	colourBSlider->SetColour(ui::Colour(sender->GetColourSelectorColour().Red, sender->GetColourSelectorColour().Green, 0), ui::Colour(sender->GetColourSelectorColour().Red, sender->GetColourSelectorColour().Green, 255));
+	colourBSlider->SetColour(ui::Colour(0, 0, 0), ui::Colour(0, 0, 255));
+	if(!colourBValue->IsFocused())
+		colourBValue->SetText(intB);
+
 	colourASlider->SetValue(sender->GetColourSelectorColour().Alpha);
-	colourASlider->SetColour(ui::Colour(0, 0, 0), ui::Colour(255, 255, 255));
+	colourASlider->SetColour(ui::Colour(0, 0, 0), ui::Colour(sender->GetColourSelectorColour().Red, sender->GetColourSelectorColour().Green, sender->GetColourSelectorColour().Blue));
+	if(!colourAValue->IsFocused())
+		colourAValue->SetText(intA);
 }
 
 void GameView::NotifyRendererChanged(GameModel * sender)
@@ -803,6 +917,9 @@ void GameView::OnMouseWheel(int x, int y, int d)
 
 void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
 {
+	if(colourRValue->IsFocused() || colourGValue->IsFocused() || colourBValue->IsFocused() || colourAValue->IsFocused())
+		return;
+
 	if(selectMode!=SelectNone)
 	{
 		if(selectMode==PlaceSave)
@@ -845,6 +962,7 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	{
 	case KEY_ALT:
 		drawSnap = true;
+		enableAltBehaviour();
 		break;
 	case KEY_CTRL:
 		if(drawModeReset)
@@ -888,6 +1006,9 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	case 'f':
 		c->FrameStep();
 		break;
+	case 'h':
+		showHud = !showHud;
+		break;
 	case 'b':
 		if(ctrl)
 			c->SetDecoration();
@@ -895,6 +1016,21 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	case 's':
 		selectMode = SelectStamp;
 		selectPoint1 = ui::Point(-1, -1);
+		break;
+	case 'w':
+		c->SwitchGravity();
+		break;
+	case 'y':
+		c->SwitchAir();
+		break;
+	case 'u':
+		c->ToggleAHeat();
+		break;
+	case '=':
+		if(ctrl)
+			c->ResetSpark();
+		else
+			c->ResetAir();
 		break;
 	case 'c':
 		if(ctrl)
@@ -922,10 +1058,10 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 		c->OpenStamps();
 		break;
 	case ']':
-		c->AdjustBrushSize(1, true, shiftBehaviour, ctrlBehaviour);
+		c->AdjustBrushSize(1, !alt, shiftBehaviour, ctrlBehaviour);
 		break;
 	case '[':
-		c->AdjustBrushSize(-1, true, shiftBehaviour, ctrlBehaviour);
+		c->AdjustBrushSize(-1, !alt, shiftBehaviour, ctrlBehaviour);
 		break;
 	}
 
@@ -937,6 +1073,9 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 
 void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt)
 {
+	if(colourRValue->IsFocused() || colourGValue->IsFocused() || colourBValue->IsFocused() || colourAValue->IsFocused())
+		return;
+
 	if(selectMode!=SelectNone)
 	{
 		return;
@@ -949,6 +1088,7 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 	{
 	case KEY_ALT:
 		drawSnap = false;
+		disableAltBehaviour();
 		break;
 	case KEY_CTRL:
 		disableCtrlBehaviour();
@@ -961,6 +1101,13 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 			c->SetZoomEnabled(false);
 		break;
 	}
+}
+
+void GameView::OnBlur()
+{
+	disableAltBehaviour();
+	disableCtrlBehaviour();
+	disableShiftBehaviour();
 }
 
 void GameView::OnTick(float dt)
@@ -1163,9 +1310,19 @@ void GameView::NotifyPlaceSaveChanged(GameModel * sender)
 	}
 }
 
-void GameView::changeColour()
+void GameView::changeColourSlider()
 {
 	c->SetColour(ui::Colour(colourRSlider->GetValue(), colourGSlider->GetValue(), colourBSlider->GetValue(), colourASlider->GetValue()));
+}
+
+void GameView::changeColourText()
+{
+	c->SetColour(ui::Colour(
+		std::min(255U, StringToNumber<unsigned int>(colourRValue->GetText())),
+		std::min(255U, StringToNumber<unsigned int>(colourGValue->GetText())),
+		std::min(255U, StringToNumber<unsigned int>(colourBValue->GetText())),
+		std::min(255U, StringToNumber<unsigned int>(colourAValue->GetText())))
+	);
 }
 
 void GameView::enableShiftBehaviour()
@@ -1181,6 +1338,22 @@ void GameView::disableShiftBehaviour()
 	if(shiftBehaviour)
 	{
 		shiftBehaviour = false;
+	}
+}
+
+void GameView::enableAltBehaviour()
+{
+	if(!altBehaviour)
+	{
+		altBehaviour = true;
+	}
+}
+
+void GameView::disableAltBehaviour()
+{
+	if(altBehaviour)
+	{
+		altBehaviour = false;
 	}
 }
 
@@ -1219,7 +1392,7 @@ void GameView::OnDraw()
 	{
 		ren->clearScreen(1.0f);
 		ren->RenderBegin();
-		if(activeBrush && currentMouse.X > 0 && currentMouse.X < XRES && currentMouse.Y > 0 && currentMouse.Y < YRES)
+		if(selectMode == SelectNone && activeBrush && currentMouse.X > 0 && currentMouse.X < XRES && currentMouse.Y > 0 && currentMouse.Y < YRES)
 		{
 			ui::Point finalCurrentMouse = c->PointTranslate(currentMouse);
 
@@ -1322,34 +1495,37 @@ void GameView::OnDraw()
 		}
 	}
 
-	//Draw info about simulation under cursor
-	std::stringstream sampleInfo;
-	sampleInfo.precision(2);
-	if(sample.particle.type)
-		sampleInfo << c->ElementResolve(sample.particle.type) << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
-	else
-		sampleInfo << "Empty";
+	if(showHud)
+	{
+		//Draw info about simulation under cursor
+		std::stringstream sampleInfo;
+		sampleInfo.precision(2);
+		if(sample.particle.type)
+			sampleInfo << c->ElementResolve(sample.particle.type) << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
+		else
+			sampleInfo << "Empty";
 
-	sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
+		sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 
-	int textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
-	g->fillrect(XRES-20-textWidth, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
-	g->drawtext(XRES-16-textWidth, 16, (const char*)sampleInfo.str().c_str(), 255, 255, 255, 255*0.75);
+		int textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
+		g->fillrect(XRES-20-textWidth, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
+		g->drawtext(XRES-16-textWidth, 16, (const char*)sampleInfo.str().c_str(), 255, 255, 255, 255*0.75);
 
 
-	//FPS and some version info
+		//FPS and some version info
 #ifndef DEBUG //In debug mode, the Engine will draw FPS and other info instead
-	std::stringstream fpsInfo;
-	fpsInfo.precision(2);
+		std::stringstream fpsInfo;
+		fpsInfo.precision(2);
 #ifdef SNAPSHOT
-	fpsInfo << "Snapshot " << SNAPSHOT_ID << ". ";
+		fpsInfo << "Snapshot " << SNAPSHOT_ID << ". ";
 #endif
-	fpsInfo << "FPS: " << std::fixed << ui::Engine::Ref().GetFps();
+		fpsInfo << "FPS: " << std::fixed << ui::Engine::Ref().GetFps();
 
-	textWidth = Graphics::textwidth((char*)fpsInfo.str().c_str());
-	g->fillrect(12, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
-	g->drawtext(16, 16, (const char*)fpsInfo.str().c_str(), 32, 216, 255, 255*0.75);
+		textWidth = Graphics::textwidth((char*)fpsInfo.str().c_str());
+		g->fillrect(12, 12, textWidth+8, 15, 0, 0, 0, 255*0.5);
+		g->drawtext(16, 16, (const char*)fpsInfo.str().c_str(), 32, 216, 255, 255*0.75);
 #endif
+	}
 
 	//Tooltips
 	if(infoTipPresence)
@@ -1368,7 +1544,7 @@ ui::Point GameView::lineSnapCoords(ui::Point point1, ui::Point point2)
 {
 	ui::Point newPoint(0, 0);
 	float snapAngle = floor(atan2(point2.Y-point1.Y, point2.X-point1.X)/(M_PI*0.25)+0.5)*M_PI*0.25;
-	float lineMag = sqrtf(pow(point2.X-point1.X,2)+pow(point2.Y-point1.Y,2));
+	float lineMag = sqrtf(pow((float)(point2.X-point1.X),2)+pow((float)(point2.Y-point1.Y),2));
 	newPoint.X = (int)(lineMag*cos(snapAngle)+point1.X+0.5f);
 	newPoint.Y = (int)(lineMag*sin(snapAngle)+point1.Y+0.5f);
 	return newPoint;

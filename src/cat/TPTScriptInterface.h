@@ -15,6 +15,11 @@ class TPTScriptInterface: public CommandInterface {
 protected:
 	AnyType eval(std::deque<std::string> * words);
 	AnyType tptS_set(std::deque<std::string> * words);
+	AnyType tptS_create(std::deque<std::string> * words);
+	AnyType tptS_delete(std::deque<std::string> * words);
+	AnyType tptS_load(std::deque<std::string> * words);
+	AnyType tptS_reset(std::deque<std::string> * words);
+	AnyType tptS_bubble(std::deque<std::string> * words);
 	ValueType testType(std::string word);
 public:
 	TPTScriptInterface(GameModel * m);

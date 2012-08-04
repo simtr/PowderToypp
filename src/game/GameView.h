@@ -11,6 +11,7 @@
 #include "interface/Point.h"
 #include "interface/Button.h"
 #include "interface/Slider.h"
+#include "interface/Textbox.h"
 #include "ToolButton.h"
 #include "RenderPreset.h"
 #include "Brush.h"
@@ -39,6 +40,8 @@ private:
 	bool drawSnap;
 	bool shiftBehaviour;
 	bool ctrlBehaviour;
+	bool altBehaviour;
+	bool showHud;
 	int toolIndex;
 
 	int infoTipPresence;
@@ -51,6 +54,7 @@ private:
 	Renderer * ren;
 	Brush * activeBrush;
 	//UI Elements
+	vector<ui::Button*> quickOptionButtons;
 	vector<ui::Button*> menuButtons;
 	vector<ToolButton*> toolButtons;
 	vector<ui::Component*> notificationComponents;
@@ -75,6 +79,11 @@ private:
 	ui::Slider * colourBSlider;
 	ui::Slider * colourASlider;
 
+	ui::Textbox * colourRValue;
+	ui::Textbox * colourGValue;
+	ui::Textbox * colourBValue;
+	ui::Textbox * colourAValue;
+
 	bool drawModeReset;
 	ui::Point drawPoint1;
 	ui::Point drawPoint2;
@@ -93,7 +102,8 @@ private:
 
 	int lastOffset;
 	void setToolButtonOffset(int offset);
-	void changeColour();
+	void changeColourSlider();
+	void changeColourText();
 	virtual ui::Point lineSnapCoords(ui::Point point1, ui::Point point2);
 	virtual ui::Point rectSnapCoords(ui::Point point1, ui::Point point2);
 
@@ -101,6 +111,8 @@ private:
 	void disableShiftBehaviour();
 	void enableCtrlBehaviour();
 	void disableCtrlBehaviour();
+	void enableAltBehaviour();
+	void disableAltBehaviour();
 public:
     GameView();
 
@@ -128,6 +140,7 @@ public:
 	void NotifyLogChanged(GameModel * sender, string entry);
 	void NotifyToolTipChanged(GameModel * sender);
 	void NotifyInfoTipChanged(GameModel * sender);
+	void NotifyQuickOptionsChanged(GameModel * sender);
 
 	virtual void ToolTip(ui::Component * sender, ui::Point mousePosition, std::string toolTip);
 
@@ -137,6 +150,9 @@ public:
 	virtual void OnMouseWheel(int x, int y, int d);
 	virtual void OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 	virtual void OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt);
+	virtual void OnTick(float dt);
+	virtual void OnDraw();
+	virtual void OnBlur();
 
 	//Top-level handers, for Lua interface
 	virtual void DoDraw();
@@ -147,12 +163,10 @@ public:
 	virtual void DoKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 	virtual void DoKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt);
 
-	//virtual void OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt) {}
-	//virtual void OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bool alt) {}
-	virtual void OnTick(float dt);
-	virtual void OnDraw();
 	class MenuAction;
 	class ToolAction;
+	class OptionAction;
+	class OptionListener;
 };
 
 #endif // GAMEVIEW_H

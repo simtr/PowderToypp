@@ -113,7 +113,9 @@ void Component::TextPosition(std::string displayText)
 
 bool Component::IsFocused() const
 {
-	return parentstate_->IsFocused(this);
+	if(parentstate_)
+		return parentstate_->IsFocused(this);
+	return false;
 }
 
 void Component::SetParentWindow(Window* window)
@@ -152,6 +154,17 @@ void Component::SetParent(Panel* new_parent)
 		new_parent->children.push_back(this);
 	}
 	this->_parent = new_parent;
+}
+
+Point Component::GetScreenPos()
+{
+	Point newPos(0,0);
+	if(GetParentWindow())
+		newPos += GetParentWindow()->Position;
+	if(GetParent())
+		newPos += GetParent()->Position;
+	newPos += Position;
+	return newPos;
 }
 
 // ***** OVERRIDEABLES *****

@@ -3829,7 +3829,7 @@ killed:
 			if (!parts[i].vx&&!parts[i].vy)//if its not moving, skip to next particle, movement code it next
 				continue;
 
-#if defined(WIN32) && !defined(__GNUC__)
+#if defined(WIN) && !defined(__GNUC__)
 			mv = max(fabsf(parts[i].vx), fabsf(parts[i].vy));
 #else
 			mv = fmaxf(fabsf(parts[i].vx), fabsf(parts[i].vy));
@@ -4292,6 +4292,24 @@ killed:
 movedone:
 			continue;
 		}
+}
+
+int Simulation::GetParticleType(std::string type)
+{
+	int i = -1;
+	char * txt = (char*)type.c_str();
+
+	// alternative names for some elements
+	if (strcasecmp(txt,"C4")==0) i = PT_PLEX;
+	else if (strcasecmp(txt,"C5")==0) i = PT_C5;
+	else if (strcasecmp(txt,"NONE")==0) i = PT_NONE;
+	for (i=1; i<PT_NUM; i++) {
+		if (strcasecmp(txt, elements[i].Name)==0 && strlen(elements[i].Name) && elements[i].Enabled)
+		{
+			return i;
+		}
+	}
+	return -1;
 }
 
 void Simulation::update_particles()//doesn't update the particles themselves, but some other things

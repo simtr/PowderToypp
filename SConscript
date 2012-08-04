@@ -25,10 +25,10 @@ def SetupSpawn( env ):
 
 AddOption('--opengl-renderer',dest="opengl-renderer",action='store_true',default=False,help="Build with OpenGL renderer support. (requires --opengl)")
 AddOption('--opengl',dest="opengl",action='store_true',default=False,help="Build with OpenGL interface support.")
-AddOption('--win32',dest="win32",action='store_true',default=False,help="32bit Windows platform target.")
-AddOption('--lin32',dest="lin32",action='store_true',default=False,help="32bit Linux platform target")
-AddOption('--lin64',dest="lin64",action='store_true',default=False,help="64bit Linux platform target")
+AddOption('--win',dest="win",action='store_true',default=False,help="Windows platform target.")
+AddOption('--lin',dest="lin",action='store_true',default=False,help="Linux platform target")
 AddOption('--macosx',dest="macosx",action='store_true',default=False,help="Mac OS X platform target")
+AddOption('--64bit',dest="_64bit",action='store_true',default=False,help="64-bit platform target")
 AddOption('--static',dest="static",action="store_true",default=False,help="Static linking, reduces external library dependancies but increased file size")
 AddOption('--pthreadw32-static',dest="ptw32-static",action="store_true",default=False,help="Use PTW32_STATIC_LIB for pthreadw32 headers")
 AddOption('--release',dest="release",action='store_true',default=False,help="Enable optimisations (Will slow down compiling)")
@@ -47,11 +47,11 @@ AddOption('--minor-version',dest="minor-version",default=False,help="Minor versi
 AddOption('--build-number',dest="build-number",default=False,help="Build number.")
 AddOption('--snapshot',dest="snapshot",default=False,help="Snapshot build.")
 
-if((not GetOption('lin32')) and (not GetOption('lin64')) and (not GetOption('win32')) and (not GetOption('macosx'))):
+if((not GetOption('lin')) and (not GetOption('win')) and (not GetOption('macosx'))):
     print "You must specify a platform to target"
     raise SystemExit(1)
 
-if(GetOption('win32')):
+if(GetOption('win')):
     env = Environment(tools = ['mingw'], ENV = os.environ)
 else:
     env = Environment(ENV = os.environ)
@@ -90,7 +90,7 @@ if not conf.CheckLib('fftw3f') and not conf.CheckLib('fftw3f-3'):
     raise SystemExit(1)
 
 #Check for Lua lib
-if not conf.CheckLib('lua') and not conf.CheckLib('lua5.1') and not conf.CheckLib('lua51'):
+if not conf.CheckLib('lua') and not conf.CheckLib('lua5.1') and not conf.CheckLib('lua51') and not conf.CheckLib('lua-5.1'):
     print "liblua not found or not installed"
     raise SystemExit(1)
 
@@ -108,23 +108,28 @@ if GetOption("ptw32-static"):
 if(GetOption('static')):
     env.Append(LINKFLAGS=['-static-libgcc'])
 
-if(GetOption('win32')):
+if(GetOption('win')):
     openGLLibs = ['opengl32', 'glew32']
     env.Prepend(LIBS=['mingw32', 'ws2_32', 'SDLmain', 'regex'])
     env.Append(LIBS=['winmm', 'gdi32'])
-    env.Append(CPPDEFINES=["WIN32"])
+    env.Append(CPPDEFINES=["WIN"])
     env.Append(LINKFLAGS=['-mwindows'])
-if(GetOption('lin32') or GetOption('lin64')):
+    if(GetOption('_64bit')):
+        env.Append(CPPDEFINES=['__CRT__NO_INLINE'])
+        env.Append(LINKFLAGS=['-Wl,--stack=16777216'])
+if(GetOption('lin')):
     openGLLibs = ['GL']
     env.Append(LIBS=['X11', 'rt'])
-    if GetOption('lin32'):
-        env.Append(LINKFLAGS=['-m32'])
-        env.Append(CCFLAGS=['-m32'])
-        env.Append(CPPDEFINES=["LIN32"])
-    else:
+    env.Append(CPPDEFINES=["LIN"])
+    if GetOption('_64bit'):
         env.Append(LINKFAGS=['-m64'])
         env.Append(CCFLAGS=['-m64'])
-        env.Append(CPPDEFINES=["LIN64"])
+    else:
+        env.Append(LINKFLAGS=['-m32'])
+        env.Append(CCFLAGS=['-m32'])
+
+if GetOption('_64bit'):
+    env.Append(CPPDEFINES=["_64BIT"])
 
 if(GetOption('beta')):
     env.Append(CPPDEFINES='BETA')
@@ -167,14 +172,14 @@ if(GetOption('opengl')):
     env.Append(CPPDEFINES=["OGLI", "PIX32OGL"])
     env.Append(LIBS=openGLLibs)
 
-if(GetOption('opengl-renderer') and GetOption('opengl-renderer')):
+if(GetOption('opengl') and GetOption('opengl-renderer')):
     env.Append(CPPDEFINES=["OGLR"])
 elif(GetOption('opengl-renderer')):
     print "opengl-renderer requires opengl"
     raise SystemExit(1)
 
 sources=Glob("src/*.cpp")
-if(GetOption('win32')):
+if(GetOption('win')):
     sources += env.RES('resources/powder-res.rc')
 sources+=Glob("src/*/*.cpp")
 sources+=Glob("src/simulation/elements/*.cpp")
@@ -187,10 +192,10 @@ SetupSpawn(env)
 
 programName = "powder"
 
-if(GetOption('win32')):
+if(GetOption('win')):
     programName = "Powder"
 
-if(GetOption('lin64')):
+if(GetOption('_64bit')):
     programName += "64"
 
 if(not (GetOption('sse2') or GetOption('sse3'))):
@@ -199,7 +204,7 @@ if(not (GetOption('sse2') or GetOption('sse3'))):
 if(GetOption('macosx')):
     programName += "-x"
 
-if(GetOption('win32')):
+if(GetOption('win')):
     programName += ".exe"
 
 env.Command(['generated/ElementClasses.cpp', 'generated/ElementClasses.h'], Glob('src/simulation/elements/*.cpp'), "python generator.py elements $TARGETS $SOURCES")

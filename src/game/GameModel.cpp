@@ -10,6 +10,7 @@
 #include "client/Client.h"
 #include "game/DecorationTool.h"
 #include "GameModelException.h"
+#include "QuickOptions.h"
 
 GameModel::GameModel():
 	sim(NULL),
@@ -52,11 +53,112 @@ GameModel::GameModel():
 
 	}
 
+	//Load last user
+	if(Client::Ref().GetAuthUser().ID)
+	{
+		currentUser = Client::Ref().GetAuthUser();
+	}
+
+	//Set stamp to first stamp in list
+	vector<string> stamps = Client::Ref().GetStamps(0, 1);
+	if(stamps.size()>0)
+	{
+		SaveFile * stampFile = Client::Ref().GetStamp(stamps[0]);
+		if(stampFile && stampFile->GetGameSave())
+			stamp = stampFile->GetGameSave();
+	}
+
+	BuildMenus();
+	BuildQuickOptionMenu();
+
+	//Set default decoration colour
+	unsigned char colourR = min(Client::Ref().GetPrefInteger("Decoration.Red", 200), 255);
+	unsigned char colourG = min(Client::Ref().GetPrefInteger("Decoration.Green", 100), 255);
+	unsigned char colourB = min(Client::Ref().GetPrefInteger("Decoration.Blue", 50), 255);
+	unsigned char colourA = min(Client::Ref().GetPrefInteger("Decoration.Alpha", 255), 255);
+
+	SetColourSelectorColour(ui::Colour(colourR, colourG, colourB, colourA));
+}
+
+GameModel::~GameModel()
+{
+	//Save to config:
+	Client::Ref().SetPref("Renderer.ColourMode", (double)ren->GetColourMode());
+
+	std::vector<unsigned int> displayModes = ren->GetDisplayMode();
+	Client::Ref().SetPref("Renderer.DisplayModes", std::vector<double>(displayModes.begin(), displayModes.end()));
+
+	std::vector<unsigned int> renderModes = ren->GetRenderMode();
+	Client::Ref().SetPref("Renderer.RenderModes", std::vector<double>(renderModes.begin(), renderModes.end()));
+
+	Client::Ref().SetPref("Decoration.Red", (int)colour.Red);
+	Client::Ref().SetPref("Decoration.Green", (int)colour.Green);
+	Client::Ref().SetPref("Decoration.Blue", (int)colour.Blue);
+	Client::Ref().SetPref("Decoration.Alpha", (int)colour.Alpha);
+
+	for(int i = 0; i < menuList.size(); i++)
+	{
+		delete menuList[i];
+	}
+	for(int i = 0; i < brushList.size(); i++)
+	{
+		delete brushList[i];
+	}
+	delete sim;
+	delete ren;
+	if(clipboard)
+		delete clipboard;
+	if(stamp)
+		delete stamp;
+	if(currentSave)
+		delete currentSave;
+	//if(activeTools)
+	//	delete[] activeTools;
+}
+
+void GameModel::UpdateQuickOptions()
+{
+	for(std::vector<QuickOption*>::iterator iter = quickOptions.begin(), end = quickOptions.end(); iter != end; ++iter)
+	{
+		QuickOption * option = *iter;
+		option->Update();
+	}	
+}
+
+void GameModel::BuildQuickOptionMenu()
+{
+	for(std::vector<QuickOption*>::iterator iter = quickOptions.begin(), end = quickOptions.end(); iter != end; ++iter)
+	{
+		delete *iter;
+	}
+	quickOptions.clear();
+
+	quickOptions.push_back(new SandEffectOption(this));
+	quickOptions.push_back(new DrawGravOption(this));
+	quickOptions.push_back(new DecorationsOption(this));
+	quickOptions.push_back(new NGravityOption(this));
+	quickOptions.push_back(new AHeatOption(this));
+
+	notifyQuickOptionsChanged();
+	UpdateQuickOptions();
+}
+
+void GameModel::BuildMenus()
+{
+	//Empty current menus
+	for(std::vector<Menu*>::iterator iter = menuList.begin(), end = menuList.end(); iter != end; ++iter)
+	{
+		delete *iter;
+	}
 	menuList.clear();
+	toolList.clear();
+
+	//Create menus
 	for(int i = 0; i < SC_TOTAL; i++)
 	{
 		menuList.push_back(new Menu((const char)sim->msections[i].icon[0], sim->msections[i].name));
 	}
+
 	//Build menus from Simulation elements
 	for(int i = 0; i < PT_NUM; i++)
 	{
@@ -66,6 +168,10 @@ GameModel::GameModel():
 			if(i == PT_LIGH)
 			{
 				tempTool = new Element_LIGH_Tool(i, sim->elements[i].Name, sim->elements[i].Description, PIXR(sim->elements[i].Colour), PIXG(sim->elements[i].Colour), PIXB(sim->elements[i].Colour));
+			}
+			else if(i == PT_STKM || i == PT_FIGH || i == PT_STKM2)
+			{
+				tempTool = new PlopTool(i, sim->elements[i].Name, sim->elements[i].Description, PIXR(sim->elements[i].Colour), PIXG(sim->elements[i].Colour), PIXB(sim->elements[i].Colour));
 			}
 			else
 			{
@@ -119,70 +225,15 @@ GameModel::GameModel():
 	//Set default tools
 	activeTools[0] = menuList[SC_POWDERS]->GetToolList()[0];
 	activeTools[1] = menuList[SC_SPECIAL]->GetToolList()[0];
+	activeTools[2] = NULL;
 
 	//Set default menu
 	activeMenu = menuList[SC_POWDERS];
 	toolList = menuList[SC_POWDERS]->GetToolList();
 
-	//Load last user
-	if(Client::Ref().GetAuthUser().ID)
-	{
-		currentUser = Client::Ref().GetAuthUser();
-	}
-
-	//Set stamp to first stamp in list
-	vector<string> stamps = Client::Ref().GetStamps(0, 1);
-	if(stamps.size()>0)
-	{
-		SaveFile * stampFile = Client::Ref().GetStamp(stamps[0]);
-		if(stampFile && stampFile->GetGameSave())
-			stamp = stampFile->GetGameSave();
-	}
-
-
-	//Set default decoration colour
-	unsigned char colourR = min(Client::Ref().GetPrefInteger("Decoration.Red", 200), 255);
-	unsigned char colourG = min(Client::Ref().GetPrefInteger("Decoration.Green", 100), 255);
-	unsigned char colourB = min(Client::Ref().GetPrefInteger("Decoration.Blue", 50), 255);
-	unsigned char colourA = min(Client::Ref().GetPrefInteger("Decoration.Alpha", 255), 255);
-
-	SetColourSelectorColour(ui::Colour(colourR, colourG, colourB, colourA));
-}
-
-GameModel::~GameModel()
-{
-	//Save to config:
-	Client::Ref().SetPref("Renderer.ColourMode", (double)ren->GetColourMode());
-
-	std::vector<unsigned int> displayModes = ren->GetDisplayMode();
-	Client::Ref().SetPref("Renderer.DisplayModes", std::vector<double>(displayModes.begin(), displayModes.end()));
-
-	std::vector<unsigned int> renderModes = ren->GetRenderMode();
-	Client::Ref().SetPref("Renderer.RenderModes", std::vector<double>(renderModes.begin(), renderModes.end()));
-
-	Client::Ref().SetPref("Decoration.Red", (int)colour.Red);
-	Client::Ref().SetPref("Decoration.Green", (int)colour.Green);
-	Client::Ref().SetPref("Decoration.Blue", (int)colour.Blue);
-	Client::Ref().SetPref("Decoration.Alpha", (int)colour.Alpha);
-
-	for(int i = 0; i < menuList.size(); i++)
-	{
-		delete menuList[i];
-	}
-	for(int i = 0; i < brushList.size(); i++)
-	{
-		delete brushList[i];
-	}
-	delete sim;
-	delete ren;
-	if(clipboard)
-		delete clipboard;
-	if(stamp)
-		delete stamp;
-	if(currentSave)
-		delete currentSave;
-	//if(activeTools)
-	//	delete[] activeTools;
+	notifyMenuListChanged();
+	notifyToolListChanged();
+	notifyActiveToolsChanged();
 }
 
 void GameModel::SetVote(int direction)
@@ -228,6 +279,8 @@ void GameModel::AddObserver(GameView * observer){
 	observer->NotifyZoomChanged(this);
 	observer->NotifyColourSelectorVisibilityChanged(this);
 	observer->NotifyColourSelectorColourChanged(this);
+	observer->NotifyQuickOptionsChanged(this);
+	UpdateQuickOptions();
 }
 
 void GameModel::SetActiveMenu(Menu * menu)
@@ -262,6 +315,11 @@ void GameModel::SetActiveTool(int selection, Tool * tool)
 {
 	activeTools[selection] = tool;
 	notifyActiveToolsChanged();
+}
+
+vector<QuickOption*> GameModel::GetQuickOptions()
+{
+	return quickOptions;
 }
 
 vector<Menu*> GameModel::GetMenuList()
@@ -302,6 +360,7 @@ void GameModel::SetSave(SaveInfo * newSave)
 		sim->Load(saveData);
 	}
 	notifySaveChanged();
+	UpdateQuickOptions();
 }
 
 void GameModel::SetSaveFile(SaveFile * newSave)
@@ -330,6 +389,7 @@ void GameModel::SetSaveFile(SaveFile * newSave)
 	delete newSave;
 	
 	notifySaveChanged();
+	UpdateQuickOptions();
 }
 
 Simulation * GameModel::GetSimulation()
@@ -458,6 +518,7 @@ void GameModel::SetDecoration(bool decorationState)
 {
 	ren->decorations_enable = decorationState?1:0;
 	notifyDecorationChanged();
+	UpdateQuickOptions();
 }
 
 bool GameModel::GetDecoration()
@@ -730,5 +791,13 @@ void GameModel::notifyToolTipChanged()
 	for(int i = 0; i < observers.size(); i++)
 	{
 		observers[i]->NotifyToolTipChanged(this);
+	}
+}
+
+void GameModel::notifyQuickOptionsChanged()
+{
+	for(int i = 0; i < observers.size(); i++)
+	{
+		observers[i]->NotifyQuickOptionsChanged(this);
 	}
 }

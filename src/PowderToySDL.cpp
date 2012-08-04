@@ -4,7 +4,7 @@
 #include <string>
 #include <time.h>
 #include "SDL.h"
-#ifdef WIN32
+#ifdef WIN
 #include "SDL_syswm.h"
 #endif
 #include <iostream>
@@ -12,7 +12,7 @@
 #include <string>
 #include "Config.h"
 #include "graphics/Graphics.h"
-#if defined(LIN32) || defined(LIN64)
+#if defined(LIN)
 #include "icon.h"
 #endif
 
@@ -35,7 +35,7 @@
 
 using namespace std;
 
-#ifdef WIN32
+#ifdef WIN
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 #endif
 
@@ -74,7 +74,7 @@ void blit(pixel * vid)
 SDL_Surface * SDLOpen()
 {
 	SDL_Surface * surface;
-#if defined(WIN32) && defined(WINCONSOLE)
+#if defined(WIN) && defined(WINCONSOLE)
 	FILE * console = fopen("CON", "w" );
 #endif
 	if (SDL_Init(SDL_INIT_VIDEO)<0)
@@ -83,17 +83,16 @@ SDL_Surface * SDLOpen()
 		return 0;
 	}
 	SDL_EnableUNICODE(1);
-#if defined(WIN32) && defined(WINCONSOLE)
+#if defined(WIN) && defined(WINCONSOLE)
 	//On Windows, SDL redirects stdout to stdout.txt, which can be annoying when debugging, here we redirect back to the console
 	if (console)
 	{
-
 		freopen("CON", "w", stdout);
 		freopen("CON", "w", stderr);
 		//fclose(console);
 	}
 #endif
-#ifdef WIN32
+#ifdef WIN
 	SDL_SysWMinfo SysInfo;
 	SDL_VERSION(&SysInfo.version);
 	if(SDL_GetWMInfo(&SysInfo) <= 0) {
@@ -105,7 +104,7 @@ SDL_Surface * SDLOpen()
 	HICON hIconBig = (HICON)LoadImage(reinterpret_cast<HMODULE>(&__ImageBase), MAKEINTRESOURCE(101), IMAGE_ICON, 32, 32, LR_SHARED);
 	SendMessage(WindowHandle, WM_SETICON, ICON_SMALL, (LPARAM)hIconSmall);
 	SendMessage(WindowHandle, WM_SETICON, ICON_BIG, (LPARAM)hIconBig);
-#elif defined(LIN32) || defined(LIN32)
+#elif defined(LIN)
 	SDL_Surface *icon = SDL_CreateRGBSurfaceFrom(app_icon, 16, 16, 32, 64, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
 	SDL_WM_SetIcon(icon, NULL);
 #endif

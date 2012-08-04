@@ -15,7 +15,8 @@ Textbox::Textbox(Point position, Point size, std::string textboxText, std::strin
 	masked(false),
 	border(true),
 	mouseDown(false),
-	limit(0)
+	limit(std::string::npos),
+	inputType(All)
 {
 	placeHolder = textboxPlaceholder;
 
@@ -64,6 +65,8 @@ void Textbox::SetText(std::string newText)
 	else
 		Label::SetText(newText);
 
+	cursor = newText.length();
+
 	if(cursor)
 	{
 		Graphics::PositionAtCharIndex(multiline?((char*)textLines.c_str()):((char*)text.c_str()), cursor, cursorPositionX, cursorPositionY);
@@ -72,6 +75,26 @@ void Textbox::SetText(std::string newText)
 	{
 		cursorPositionY = cursorPositionX = 0;
 	}
+}
+
+Textbox::ValidInput Textbox::GetInputType()
+{
+	return inputType;
+}
+
+void Textbox::SetInputType(ValidInput input)
+{
+	inputType = input;
+}
+
+void Textbox::SetLimit(size_t limit)
+{
+	this->limit = limit;
+}
+
+size_t Textbox::GetLimit()
+{
+	return limit;
 }
 
 void Textbox::SetDisplayText(std::string newText)
@@ -194,6 +217,20 @@ void Textbox::pasteIntoSelection()
 	}
 }
 
+bool Textbox::CharacterValid(Uint16 character)
+{
+	switch(inputType)
+	{
+		case Number:
+		case Numeric:
+			return (character >= '0' && character <= '9');
+		case All:
+		default:
+			return (character >= ' ' && character < 127);
+	}
+	return false;
+}
+
 void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
 {
 	bool changed = false;
@@ -219,17 +256,21 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 		{
 		case KEY_HOME:
 			cursor = 0;
+			ClearSelection();
 			break;
 		case KEY_END:
 			cursor = backingText.length();
+			ClearSelection();
 			break;
 		case KEY_LEFT:
 			if(cursor > 0)
 				cursor--;
+			ClearSelection();
 			break;
 		case KEY_RIGHT:
 			if(cursor < backingText.length())
 				cursor++;
+			ClearSelection();
 			break;
 		case KEY_DELETE:
 			if(HasSelection())
@@ -248,6 +289,7 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 					backingText.erase(cursor, 1);
 				changed = true;
 			}
+			ClearSelection();
 			break;
 		case KEY_BACKSPACE:
 			if(HasSelection())
@@ -272,9 +314,10 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 				}
 				changed = true;
 			}
+			ClearSelection();
 			break;
 		}
-		if(character >= ' ' && character < 127)
+		if(CharacterValid(character))
 		{
 			if(HasSelection())
 			{
@@ -284,24 +327,39 @@ void Textbox::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool 
 				cursor = getLowerSelectionBound();
 			}
 
-			if(cursor == backingText.length())
+			if(limit==std::string::npos || backingText.length() < limit)
 			{
-				backingText += character;
-			}
-			else
-			{
-				backingText.insert(cursor, 1, (char)character);
+				if(cursor == backingText.length())
+				{
+					backingText += character;
+				}
+				else
+				{
+					backingText.insert(cursor, 1, (char)character);
+				}
 			}
 			cursor++;
 			changed = true;
+			ClearSelection();
 		}
-		ClearSelection();
 	}
 	catch(std::out_of_range &e)
 	{
 		cursor = 0;
 		backingText = "";
 	}
+	if(inputType == Number)
+	{
+		//Remove extra preceding 0's
+		while(backingText[0] == '0' && backingText.length()>1)
+			backingText.erase(backingText.begin());
+
+		//If there is no content, replace with 0
+		if(!backingText.length())
+			backingText = "0";
+	}
+	if(cursor > backingText.length())
+			cursor = backingText.length();
 	if(changed)
 	{
 		if(masked)
@@ -383,7 +441,7 @@ void Textbox::Draw(const Point& screenPos)
 	if(IsFocused())
 	{
 		if(border) g->drawrect(screenPos.X, screenPos.Y, Size.X, Size.Y, 255, 255, 255, 255);
-		g->draw_line(screenPos.X+textPosition.X+cursorPositionX, screenPos.Y-2+textPosition.Y+cursorPositionY, screenPos.X+textPosition.X+cursorPositionX, screenPos.Y+10+textPosition.Y+cursorPositionY, 255, 255, 255, 255);
+		g->draw_line(screenPos.X+textPosition.X+cursorPositionX, screenPos.Y-2+textPosition.Y+cursorPositionY, screenPos.X+textPosition.X+cursorPositionX, screenPos.Y+9+textPosition.Y+cursorPositionY, 255, 255, 255, 255);
 	}
 	else
 	{

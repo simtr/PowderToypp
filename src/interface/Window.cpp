@@ -2,6 +2,7 @@
 #include "Window.h"
 #include "Component.h"
 #include "interface/Point.h"
+#include "interface/Button.h"
 
 using namespace ui;
 
@@ -11,7 +12,9 @@ Window::Window(Point _position, Point _size):
 	focusedComponent_(NULL),
 	AllowExclusiveDrawing(true),
 	halt(false),
-	destruct(false)
+	destruct(false),
+	cancelButton(NULL),
+	okayButton(NULL)
 #ifdef DEBUG
 	,debugMode(false)
 #endif
@@ -75,6 +78,18 @@ void Window::RemoveComponent(Component* c)
 	}
 }
 
+void Window::OnTryExit(ExitMethod method)
+{
+	if(cancelButton)
+		cancelButton->DoAction();
+}
+
+void Window::OnTryOkay(OkayMethod method)
+{
+	if(okayButton)
+		okayButton->DoAction();
+}
+
 void Window::RemoveComponent(unsigned idx)
 {
 	halt = true;
@@ -105,6 +120,18 @@ void Window::DoInitialized()
 {
 
 	OnInitialized();
+}
+
+void Window::DoBlur()
+{
+
+	OnBlur();
+}
+
+void Window::DoFocus()
+{
+
+	OnFocus();
 }
 
 void Window::DoDraw()
@@ -261,6 +288,13 @@ void Window::DoKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool a
 	}
 
 	OnKeyPress(key, character, shift, ctrl, alt);
+	
+	if(key == KEY_ESCAPE)
+		OnTryExit(Escape);
+
+	if(key == KEY_ENTER || key == KEY_RETURN)
+		OnTryOkay(Enter);
+
 	if(destruct)
 		finalise();
 }
@@ -322,6 +356,10 @@ void Window::DoMouseDown(int x_, int y_, unsigned button)
 	}
 
 	OnMouseDown(x_, y_, button);
+
+	if(x_ < Position.X || y_ < Position.Y || x_ > Position.X+Size.X || y_ > Position.Y+Size.Y)
+		OnTryExit(MouseOutside);
+
 	if(destruct)
 		finalise();
 }

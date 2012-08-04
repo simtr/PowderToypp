@@ -59,7 +59,7 @@ class PropertyTool: public Tool
 {
 public:
 	PropertyTool():
-	Tool(0, "PROP", "Property Edit. Click to alter the properties of elements in the field", 0, 0, 0, NULL)
+	Tool(0, "PROP", "Property Edit. Click to alter the properties of elements in the field", 0xfe, 0xa9, 0x00, NULL)
 	{
 	}
 	virtual ~PropertyTool() {}
@@ -94,6 +94,21 @@ public:
 	virtual void DrawLine(Simulation * sim, Brush * brush, ui::Point position1, ui::Point position2, bool dragging = false);
 	virtual void DrawRect(Simulation * sim, Brush * brush, ui::Point position1, ui::Point position2);
 	virtual void DrawFill(Simulation * sim, Brush * brush, ui::Point position);
+};
+
+class PlopTool: public ElementTool
+{
+public:
+	PlopTool(int id, string name, string description, int r, int g, int b, VideoBuffer * (*textureGen)(int, int, int) = NULL):
+	ElementTool(id, name, description, r, g, b)
+	{
+	}
+	virtual ~PlopTool() {}
+	virtual void Draw(Simulation * sim, Brush * brush, ui::Point position) {}
+	virtual void Click(Simulation * sim, Brush * brush, ui::Point position);
+	virtual void DrawLine(Simulation * sim, Brush * brush, ui::Point position1, ui::Point position2, bool dragging = false) { }
+	virtual void DrawRect(Simulation * sim, Brush * brush, ui::Point position1, ui::Point position2) { }
+	virtual void DrawFill(Simulation * sim, Brush * brush, ui::Point position) { }
 };
 
 class WallTool: public Tool
