@@ -20,8 +20,13 @@ public:
 	{
 		if(cc->activePreview->GetDoOpen() && cc->activePreview->GetSave())
 		{
-			cc->searchModel->SetLoadedSave(new SaveInfo(*(cc->activePreview->GetSave())));
+			cc->searchModel->SetLoadedSave(cc->activePreview->GetSave());
 		}
+		else
+		{
+			cc->searchModel->SetLoadedSave(NULL);
+		}
+
 	}
 };
 
@@ -76,7 +81,7 @@ void SearchController::Exit()
 	}
 	if(callback)
 		callback->ControllerExit();
-	HasExited = true;
+	//HasExited = true;
 }
 
 SearchController::~SearchController()
@@ -91,11 +96,19 @@ SearchController::~SearchController()
 	delete searchView;
 }
 
-void SearchController::DoSearch(std::string query)
+void SearchController::DoSearch(std::string query, bool now)
 {
 	nextQuery = query;
-	nextQueryTime = clock()+(0.6 * CLOCKS_PER_SEC);
-	nextQueryDone = false;
+	if(!now)
+	{
+		nextQueryTime = clock()+(0.6 * CLOCKS_PER_SEC);
+		nextQueryDone = false;
+	}
+	else
+	{
+		nextQueryDone = true;
+		searchModel->UpdateSaveList(1, nextQuery);
+	}
 	//searchModel->UpdateSaveList(1, query);
 }
 
@@ -161,6 +174,8 @@ void SearchController::Selected(int saveID, bool selected)
 
 void SearchController::OpenSave(int saveID)
 {
+	if(activePreview)
+		delete activePreview;
 	activePreview = new PreviewController(saveID, new OpenCallback(this));
 	ui::Engine::Ref().ShowWindow(activePreview->GetView());
 }

@@ -15,6 +15,7 @@
 #include "interface/Window.h"
 #include "interface/Textbox.h"
 #include "Style.h"
+#include "Format.h"
 #include "search/Thumbnail.h"
 #include "client/Client.h"
 #include "interface/ScrollPanel.h"
@@ -74,6 +75,7 @@ PreviewView::PreviewView():
 	openButton->SetIcon(IconOpen);
 	openButton->SetActionCallback(new OpenAction(this));
 	AddComponent(openButton);
+	SetOkayButton(openButton);
 
 	class FavAction: public ui::ButtonAction
 	{
@@ -290,10 +292,9 @@ void PreviewView::OnTick(float dt)
 	c->Update();
 }
 
-void PreviewView::OnMouseDown(int x, int y, unsigned button)
+void PreviewView::OnTryExit(ExitMethod method)
 {
-	if(!(x > Position.X && y > Position.Y && y < Position.Y+Size.Y && x < Position.X+Size.X)) //Clicked outside window
-		c->Exit();
+	c->Exit();
 }
 
 void PreviewView::OnMouseWheel(int x, int y, int d)
@@ -316,7 +317,7 @@ void PreviewView::NotifySaveChanged(PreviewModel * sender)
 		votesUp = save->votesUp;
 		votesDown = save->votesDown;
 		saveNameLabel->SetText(save->name);
-		authorDateLabel->SetText("\bgAuthor:\bw " + save->userName + " \bgDate:\bw ");
+		authorDateLabel->SetText("\bgAuthor:\bw " + save->userName + " \bgDate:\bw " + format::UnixtimeToDateMini(save->date));
 		saveDescriptionLabel->SetText(save->Description);
 		if(save->Favourite)
 			favButton->Enabled = false;

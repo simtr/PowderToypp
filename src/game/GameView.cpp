@@ -12,6 +12,8 @@
 #include "interface/Slider.h"
 #include "search/Thumbnail.h"
 #include "simulation/SaveRenderer.h"
+#include "dialogues/ConfirmPrompt.h"
+#include "Format.h"
 #include "QuickOption.h"
 
 GameView::GameView():
@@ -603,10 +605,10 @@ void GameView::NotifyColourSelectorColourChanged(GameModel * sender)
 {
 	std::string intR, intG, intB, intA;
 
-	intR = NumberToString<int>(sender->GetColourSelectorColour().Red);
-	intG = NumberToString<int>(sender->GetColourSelectorColour().Green);
-	intB = NumberToString<int>(sender->GetColourSelectorColour().Blue);
-	intA = NumberToString<int>(sender->GetColourSelectorColour().Alpha);
+	intR = format::NumberToString<int>(sender->GetColourSelectorColour().Red);
+	intG = format::NumberToString<int>(sender->GetColourSelectorColour().Green);
+	intB = format::NumberToString<int>(sender->GetColourSelectorColour().Blue);
+	intA = format::NumberToString<int>(sender->GetColourSelectorColour().Alpha);
 
 	colourRSlider->SetValue(sender->GetColourSelectorColour().Red);
 	colourRSlider->SetColour(ui::Colour(0, 0, 0), ui::Colour(255, 0, 0));
@@ -887,6 +889,22 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 	}
 }
 
+void GameView::ExitPrompt()
+{
+	class ExitConfirmation: public ConfirmDialogueCallback {
+	public:
+		ExitConfirmation() {}
+		virtual void ConfirmCallback(ConfirmPrompt::DialogueResult result) {
+			if (result == ConfirmPrompt::ResultOkay)
+			{
+				ui::Engine::Ref().Exit();
+			}
+		}
+		virtual ~ExitConfirmation() { }
+	};
+	new ConfirmPrompt("You are about to quit", "Are you sure you want to exit the game?", new ExitConfirmation());
+}
+
 void GameView::ToolTip(ui::Component * sender, ui::Point mousePosition, std::string toolTip)
 {
 	this->toolTip = toolTip;
@@ -1022,6 +1040,10 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 		break;
 	case 'y':
 		c->SwitchAir();
+		break;
+	case KEY_ESCAPE:
+	case 'q':
+		ExitPrompt();
 		break;
 	case 'u':
 		c->ToggleAHeat();
@@ -1318,10 +1340,10 @@ void GameView::changeColourSlider()
 void GameView::changeColourText()
 {
 	c->SetColour(ui::Colour(
-		std::min(255U, StringToNumber<unsigned int>(colourRValue->GetText())),
-		std::min(255U, StringToNumber<unsigned int>(colourGValue->GetText())),
-		std::min(255U, StringToNumber<unsigned int>(colourBValue->GetText())),
-		std::min(255U, StringToNumber<unsigned int>(colourAValue->GetText())))
+		std::min(255U, format::StringToNumber<unsigned int>(colourRValue->GetText())),
+		std::min(255U, format::StringToNumber<unsigned int>(colourGValue->GetText())),
+		std::min(255U, format::StringToNumber<unsigned int>(colourBValue->GetText())),
+		std::min(255U, format::StringToNumber<unsigned int>(colourAValue->GetText())))
 	);
 }
 

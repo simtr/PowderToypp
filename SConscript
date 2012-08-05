@@ -102,8 +102,7 @@ env = conf.Finish();
 env.Append(CPPPATH=['src/', 'data/', 'generated/'])
 env.Append(CCFLAGS=['-w', '-std=c99', '-fkeep-inline-functions'])
 env.Append(LIBS=['pthread', 'm', 'bz2'])
-env.Append(CPPDEFINES={"_POSIX_C_SOURCE": "200112L"})
-env.Append(CPPDEFINES=["USE_SDL", "LUACONSOLE", "GRAVFFT", "_GNU_SOURCE", "USE_STDINT"])
+env.Append(CPPDEFINES=["USE_SDL", "LUACONSOLE", "GRAVFFT", "_GNU_SOURCE", "USE_STDINT", "_POSIX_C_SOURCE=200112L"])
 
 if GetOption("ptw32-static"):
     env.Append(CPPDEFINES=['PTW32_STATIC_LIB']);
@@ -138,16 +137,16 @@ if(GetOption('beta')):
     env.Append(CPPDEFINES='BETA')
 
 if(GetOption('snapshot')):
-    env.Append(CPPDEFINES={'SNAPSHOT_ID': GetOption('snapshot')})
+    env.Append(CPPDEFINES=['SNAPSHOT_ID=' + GetOption('snapshot')])
     env.Append(CPPDEFINES='SNAPSHOT')
 else:
-    env.Append(CPPDEFINES={"SNAPSHOT_ID": int(time.time())})
+    env.Append(CPPDEFINES=["SNAPSHOT_ID=" + str(int(time.time()))])
 
 if(GetOption('save-version')):
-    env.Append(CPPDEFINES={'SAVE_VERSION': GetOption('major-version')})
+    env.Append(CPPDEFINES=['SAVE_VERSION=' + GetOption('major-version')])
 
 if(GetOption('minor-version')):
-    env.Append(CPPDEFINES={'MINOR_VERSION': GetOption('minor-version')})
+    env.Append(CPPDEFINES=['MINOR_VERSION=' + GetOption('minor-version')])
 
 if(GetOption('release')):
     env.Append(CCFLAGS=['-O3', '-ftree-vectorize', '-funsafe-math-optimizations', '-ffast-math', '-fomit-frame-pointer', '-funsafe-loop-optimizations', '-Wunsafe-loop-optimizations'])
