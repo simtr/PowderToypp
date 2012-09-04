@@ -1,6 +1,9 @@
 //#include <cstdlib>
 #include <cmath>
+#include <math.h>
+#if !defined(WIN) || defined(__GNUC__)
 #include <strings.h>
+#endif
 #include "Config.h"
 #include "Simulation.h"
 #include "Elements.h"
@@ -1086,6 +1089,7 @@ int Simulation::ToolBrush(int positionX, int positionY, int tool, Brush * cBrush
 				if(bitmap[(y*sizeX)+x] && (positionX+(x-radiusX) >= 0 && positionY+(y-radiusY) >= 0 && positionX+(x-radiusX) < XRES && positionY+(y-radiusY) < YRES))
 					Tool(positionX+(x-radiusX), positionY+(y-radiusY), tool, strength);
 	}
+	return 0;
 }
 
 void Simulation::ToolLine(int x1, int y1, int x2, int y2, int tool, Brush * cBrush, float strength)
@@ -1653,7 +1657,7 @@ void *Simulation::transform_save(void *odata, int *size, matrix2d transform, vec
 	return ndata;
 }
 
-inline void Simulation::orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[])
+TPT_NO_INLINE void Simulation::orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[])
 {
 	resblock1[0] = (block1&0x000000FF);
 	resblock1[1] = (block1&0x0000FF00)>>8;
@@ -1666,7 +1670,7 @@ inline void Simulation::orbitalparts_get(int block1, int block2, int resblock1[]
 	resblock2[3] = (block2&0xFF000000)>>24;
 }
 
-inline void Simulation::orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[])
+TPT_NO_INLINE void Simulation::orbitalparts_set(int *block1, int *block2, int resblock1[], int resblock2[])
 {
 	int block1tmp = 0;
 	int block2tmp = 0;
@@ -3945,11 +3949,7 @@ killed:
 			if (!parts[i].vx&&!parts[i].vy)//if its not moving, skip to next particle, movement code it next
 				continue;
 
-#if defined(WIN) && !defined(__GNUC__)
-			mv = max(fabsf(parts[i].vx), fabsf(parts[i].vy));
-#else
 			mv = fmaxf(fabsf(parts[i].vx), fabsf(parts[i].vy));
-#endif
 			if (mv < ISTP)
 			{
 				clear_x = x;
