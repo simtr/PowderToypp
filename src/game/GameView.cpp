@@ -1931,7 +1931,7 @@ void GameView::OnDraw()
 				if(sample.particle.ctype > 0 && sample.particle.ctype < PT_NUM)
 					sampleInfo << " (" << c->ElementResolve(sample.particle.ctype) << ")";
 				else
-					sampleInfo << " ()";	
+					sampleInfo << " ()";
 				sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 				sampleInfo << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
 				sampleInfo << ", Life: " << sample.particle.life;
@@ -1949,9 +1949,13 @@ void GameView::OnDraw()
 			if(sample.particle.type == PT_PHOT)
 				wavelengthGfx = sample.particle.ctype;
 		}
-		else
+		else if (sample.InSimulationArea)
 		{
 			sampleInfo << "Empty, Pressure: " << std::fixed << sample.AirPressure;
+		}
+		else
+		{
+			sampleInfo << "Empty";
 		}
 
 		int textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
@@ -2004,6 +2008,8 @@ void GameView::OnDraw()
 				sampleInfo << "#" << sample.ParticleID << ", ";
 			}
 			sampleInfo << "X:" << sample.PositionX << " Y:" << sample.PositionY;
+			if (sample.Gravity && sample.InSimulationArea)
+				sampleInfo << " GX: " << sample.GravityVelocityX << " GY: " << sample.GravityVelocityY;
 
 			textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
 			g->fillrect(XRES-20-textWidth, 26, textWidth+8, 15, 0, 0, 0, 255*0.5);
@@ -2015,11 +2021,14 @@ void GameView::OnDraw()
 #ifndef DEBUG //In debug mode, the Engine will draw FPS and other info instead
 		std::stringstream fpsInfo;
 		fpsInfo.precision(2);
+		if (showDebug)
+		{
 #ifdef SNAPSHOT
-		fpsInfo << "Snapshot " << SNAPSHOT_ID << ", ";
+			fpsInfo << "Snapshot " << SNAPSHOT_ID << ", ";
 #elif defined(BETA)
-		fpsInfo << "Beta " << SAVE_VERSION << "." << MINOR_VERSION << "." << BUILD_NUM << ", ";
+			fpsInfo << "Beta " << SAVE_VERSION << "." << MINOR_VERSION << "." << BUILD_NUM << ", ";
 #endif
+		}
 		fpsInfo << "FPS: " << std::fixed << ui::Engine::Ref().GetFps();
 
 		textWidth = Graphics::textwidth((char*)fpsInfo.str().c_str());

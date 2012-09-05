@@ -407,26 +407,30 @@ SimulationSample Simulation::Get(int x, int y)
 	SimulationSample sample;
 	sample.PositionX = x;
 	sample.PositionY = y;
-	if(pmap[y][x])
+	if(x >= 0 && y >= 0 && x < XRES && y < YRES)
 	{
-		sample.particle = parts[pmap[y][x]>>8];
-		sample.ParticleID = pmap[y][x]>>8;
-	}
-	else if(photons[y][x])
-	{
-		sample.particle = parts[photons[y][x]>>8];
-		sample.ParticleID = photons[y][x]>>8;
-	}
-	sample.AirPressure = pv[y/CELL][x/CELL];
-	sample.AirTemperature = hv[y/CELL][x/CELL];
-	sample.AirVelocityX = vx[y/CELL][x/CELL];
-	sample.AirVelocityY = vy[y/CELL][x/CELL];
+		if(pmap[y][x])
+		{
+			sample.particle = parts[pmap[y][x]>>8];
+			sample.ParticleID = pmap[y][x]>>8;
+		}
+		else if(photons[y][x])
+		{
+			sample.particle = parts[photons[y][x]>>8];
+			sample.ParticleID = photons[y][x]>>8;
+		}
+		sample.AirPressure = pv[y/CELL][x/CELL];
+		sample.AirTemperature = hv[y/CELL][x/CELL];
+		sample.AirVelocityX = vx[y/CELL][x/CELL];
+		sample.AirVelocityY = vy[y/CELL][x/CELL];
 
-	if(grav->ngrav_enable)
-	{
-		sample.Gravity = gravp[(y/CELL)*(XRES/CELL)+(x/CELL)];
-		sample.GravityVelocityX = gravx[(y/CELL)*(XRES/CELL)+(x/CELL)];
-		sample.GravityVelocityY = gravy[(y/CELL)*(XRES/CELL)+(x/CELL)];
+		if(grav->ngrav_enable)
+		{
+			sample.Gravity = gravp[(y/CELL)*(XRES/CELL)+(x/CELL)];
+			sample.GravityVelocityX = gravx[(y/CELL)*(XRES/CELL)+(x/CELL)];
+			sample.GravityVelocityY = gravy[(y/CELL)*(XRES/CELL)+(x/CELL)];
+		}
+		sample.InSimulationArea = 1;
 	}
 	return sample;
 }

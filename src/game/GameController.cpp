@@ -765,8 +765,8 @@ void GameController::Update()
 	{
 		gameModel->GetRenderer()->mousePosX = pos.X;
 		gameModel->GetRenderer()->mousePosY = pos.Y;
-		gameView->SetSample(gameModel->GetSimulation()->Get(pos.X, pos.Y));
 	}
+	gameView->SetSample(gameModel->GetSimulation()->Get(pos.X, pos.Y));
 
 	gameModel->GetSimulation()->update_particles();
 	if(renderOptions && renderOptions->HasExited)
