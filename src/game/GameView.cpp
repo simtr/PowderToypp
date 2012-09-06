@@ -1924,7 +1924,7 @@ void GameView::OnDraw()
 		std::stringstream sampleInfo;
 		sampleInfo.precision(2);
 		if(sample.particle.type)
-		{	
+		{
 			if(showDebug)
 			{
 				sampleInfo << c->ElementResolve(sample.particle.type);
@@ -1932,10 +1932,10 @@ void GameView::OnDraw()
 					sampleInfo << " (" << c->ElementResolve(sample.particle.ctype) << ")";
 				else
 					sampleInfo << " ()";
-				sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 				sampleInfo << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
 				sampleInfo << ", Life: " << sample.particle.life;
 				sampleInfo << ", Tmp: " << sample.particle.tmp;
+				sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 			}
 			else
 			{
@@ -1943,11 +1943,16 @@ void GameView::OnDraw()
 					sampleInfo << "Molten " << c->ElementResolve(sample.particle.ctype);
 				else
 					sampleInfo << c->ElementResolve(sample.particle.type);
-				sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 				sampleInfo << ", Temp: " << std::fixed << sample.particle.temp -273.15f;
+				sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 			}
 			if(sample.particle.type == PT_PHOT)
 				wavelengthGfx = sample.particle.ctype;
+		}
+		else if (sample.WallType)
+		{
+			sampleInfo << c->WallName(sample.WallType);
+			sampleInfo << ", Pressure: " << std::fixed << sample.AirPressure;
 		}
 		else
 		{

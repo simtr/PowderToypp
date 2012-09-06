@@ -1191,6 +1191,14 @@ std::string GameController::ElementResolve(int type)
 		return "";
 }
 
+std::string GameController::WallName(int type)
+{
+	if(gameModel && gameModel->GetSimulation() && gameModel->GetSimulation()->wtypes && type >= 0)
+		return std::string(gameModel->GetSimulation()->wtypes[type].name);
+	else
+		return "";
+}
+
 void GameController::NotifyUpdateAvailable(Client * sender)
 {
 	class UpdateConfirmation: public ConfirmDialogueCallback {
