@@ -997,7 +997,7 @@ void GameView::OnMouseDown(int x, int y, unsigned button)
 		}
 		return;
 	}
-	if(currentMouse.X > 0 && currentMouse.X < XRES && currentMouse.Y > 0 && currentMouse.Y < YRES && !(zoomEnabled && !zoomCursorFixed))
+	if(currentMouse.X >= 0 && currentMouse.X < XRES && currentMouse.Y >= 0 && currentMouse.Y < YRES && !(zoomEnabled && !zoomCursorFixed))
 	{
 		if(button == BUTTON_LEFT)
 			toolIndex = 0;
@@ -1755,7 +1755,7 @@ void GameView::OnDraw()
 	{
 		ren->clearScreen(1.0f);
 		ren->RenderBegin();
-		if(selectMode == SelectNone && (!zoomEnabled || zoomCursorFixed) && activeBrush && currentMouse.X > 0 && currentMouse.X < XRES && currentMouse.Y > 0 && currentMouse.Y < YRES)
+		if(selectMode == SelectNone && (!zoomEnabled || zoomCursorFixed) && activeBrush && currentMouse.X >= 0 && currentMouse.X < XRES && currentMouse.Y >= 0 && currentMouse.Y < YRES)
 		{
 			ui::Point finalCurrentMouse = c->PointTranslate(currentMouse);
 			ui::Point initialDrawPoint = drawPoint1;
@@ -1949,13 +1949,9 @@ void GameView::OnDraw()
 			if(sample.particle.type == PT_PHOT)
 				wavelengthGfx = sample.particle.ctype;
 		}
-		else if (sample.InSimulationArea)
-		{
-			sampleInfo << "Empty, Pressure: " << std::fixed << sample.AirPressure;
-		}
 		else
 		{
-			sampleInfo << "Empty";
+			sampleInfo << "Empty, Pressure: " << std::fixed << sample.AirPressure;
 		}
 
 		int textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());
@@ -2008,7 +2004,7 @@ void GameView::OnDraw()
 				sampleInfo << "#" << sample.ParticleID << ", ";
 			}
 			sampleInfo << "X:" << sample.PositionX << " Y:" << sample.PositionY;
-			if (sample.Gravity && sample.InSimulationArea)
+			if (sample.Gravity)
 				sampleInfo << " GX: " << sample.GravityVelocityX << " GY: " << sample.GravityVelocityY;
 
 			textWidth = Graphics::textwidth((char*)sampleInfo.str().c_str());

@@ -341,7 +341,7 @@ ui::Point GameController::PointTranslate(ui::Point point)
 	if(point.X >= XRES)
 		point.X = XRES-1;
 	if(point.Y >= YRES)
-		point.Y = YRES+1;
+		point.Y = YRES-1;
 	if(point.Y < 0)
 		point.Y = 0;
 	if(point.X < 0)
@@ -765,8 +765,8 @@ void GameController::Update()
 	{
 		gameModel->GetRenderer()->mousePosX = pos.X;
 		gameModel->GetRenderer()->mousePosY = pos.Y;
+		gameView->SetSample(gameModel->GetSimulation()->Get(pos.X, pos.Y));
 	}
-	gameView->SetSample(gameModel->GetSimulation()->Get(pos.X, pos.Y));
 
 	gameModel->GetSimulation()->update_particles();
 	if(renderOptions && renderOptions->HasExited)
