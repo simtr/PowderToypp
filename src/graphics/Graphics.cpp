@@ -334,6 +334,30 @@ pixel *Graphics::resample_img(pixel *src, int sw, int sh, int rw, int rh)
 #ifdef DEBUG
 	std::cout << "Resampling " << sw << "x" << sh << " to " << rw << "x" << rh << std::endl;
 #endif
+	bool stairstep = false;
+	if(rw < sw || rh < sh)
+	{
+		float fx = (float)(((float)sw)/((float)rw));
+		float fy = (float)(((float)sh)/((float)rh));
+
+		int fxint, fyint;
+		double fxintp_t, fyintp_t;
+
+		float fxf = modf(fx, &fxintp_t), fyf = modf(fy, &fyintp_t);
+		fxint = fxintp_t;
+		fyint = fyintp_t;
+
+		if(((fxint & (fxint-1)) == 0 && fxf < 0.1f) || ((fyint & (fyint-1)) == 0 && fyf < 0.1f))
+			stairstep = true;
+
+#ifdef DEBUG
+		if(stairstep)
+			std::cout << "Downsampling by " << fx << "x" << fy << " using stairstepping" << std::endl;
+		else
+			std::cout << "Downsampling by " << fx << "x" << fy << " without stairstepping" << std::endl;
+#endif
+	}
+
 	int y, x, fxceil, fyceil;
 	//int i,j,x,y,w,h,r,g,b,c;
 	pixel *q = NULL;
@@ -341,7 +365,7 @@ pixel *Graphics::resample_img(pixel *src, int sw, int sh, int rw, int rh)
 		//Don't resample
 		q = (pixel *)malloc(rw*rh*PIXELSIZE);
 		memcpy(q, src, rw*rh*PIXELSIZE);
-	} else if(rw >= sw && rh >= sh){
+	} else if(!stairstep) {
 		float fx, fy, fyc, fxc;
 		double intp;
 		pixel tr, tl, br, bl;
@@ -463,6 +487,11 @@ int Graphics::textwidth(const char *s)
 	for (; *s; s++)
 		x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
 	return x-1;
+}
+
+int Graphics::CharWidth(char c)
+{
+	return font_data[font_ptrs[(int)c]];
 }
 
 int Graphics::textnwidth(char *s, int n)
@@ -883,13 +912,25 @@ void Graphics::draw_icon(int x, int y, Icon icon, unsigned char alpha, bool inve
 	case IconDelete:
 		if(invert)
 		{
-			drawchar(x, y, 0x86, 255, 55, 55, alpha);
+			drawchar(x, y, 0x86, 159, 47, 31, alpha);
 			drawchar(x, y, 0x85, 0, 0, 0, alpha);
 		}
 		else
 		{
-			drawchar(x, y, 0x86, 255, 55, 55, alpha);
+			drawchar(x, y, 0x86, 159, 47, 31, alpha);
 			drawchar(x, y, 0x85, 255, 255, 255, alpha);
+		}
+		break;
+	case IconAdd:
+		if(invert)
+		{
+			drawchar(x, y, 0x86, 32, 144, 32, alpha);
+			drawchar(x, y, 0x89, 0, 0, 0, alpha);
+		}
+		else
+		{
+			drawchar(x, y, 0x86, 32, 144, 32, alpha);
+			drawchar(x, y, 0x89, 255, 255, 255, alpha);
 		}
 		break;
 	default:

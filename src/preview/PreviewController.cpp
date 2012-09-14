@@ -15,9 +15,33 @@
 #include "login/LoginController.h"
 #include "Controller.h"
 
+PreviewController::PreviewController(int saveID, int saveDate, ControllerCallback * callback):
+	HasExited(false),
+	saveId(saveID),
+	saveDate(saveDate),
+	loginWindow(NULL)
+{
+	previewModel = new PreviewModel();
+	previewView = new PreviewView();
+	previewModel->AddObserver(previewView);
+	previewView->AttachController(this);
+
+	previewModel->UpdateSave(saveID, saveDate);
+
+	if(Client::Ref().GetAuthUser().ID)
+	{
+		previewModel->SetCommentBoxEnabled(true);
+	}
+
+	Client::Ref().AddListener(this);
+
+	this->callback = callback;
+}
+
 PreviewController::PreviewController(int saveID, ControllerCallback * callback):
 	HasExited(false),
 	saveId(saveID),
+	saveDate(0),
 	loginWindow(NULL)
 {
 	previewModel = new PreviewModel();
@@ -119,7 +143,13 @@ void PreviewController::Report(std::string message)
 
 void PreviewController::FavouriteSave()
 {
-	previewModel->SetFavourite(true);
+	if(previewModel->GetSave() && Client::Ref().GetAuthUser().ID)
+	{
+		if(previewModel->GetSave()->Favourite)
+			previewModel->SetFavourite(false);
+		else
+			previewModel->SetFavourite(true);
+	}
 }
 
 void PreviewController::OpenInBrowser()

@@ -14,12 +14,15 @@ using namespace std;
 
 Engine::Engine():
 	state_(NULL),
+	maxWidth(0),
+	maxHeight(0),
 	mousex_(0),
 	mousey_(0),
 	mousexp_(0),
 	mouseyp_(0),
 	FpsLimit(60.0f),
 	windows(stack<Window*>()),
+	mousePositions(stack<Point>()),
 	lastBuffer(NULL),
 	prevBuffers(stack<pixel*>()),
 	windowTargetPosition(0, 0),
@@ -96,6 +99,7 @@ void Engine::ShowWindow(Window * window)
 #endif
 
 		windows.push(state_);
+		mousePositions.push(ui::Point(mousex_, mousey_));
 	}
 	if(state_)
 		state_->DoBlur();
@@ -123,6 +127,17 @@ void Engine::CloseWindow()
 
 		if(state_)
 			state_->DoFocus();
+
+		ui::Point mouseState = mousePositions.top();
+		mousePositions.pop();
+		if(state_)
+		{
+			mousexp_ = mouseState.X;
+			mouseyp_ = mouseState.Y;
+			state_->DoMouseMove(mousex_, mousey_, mousex_ - mousexp_, mousey_ - mouseyp_);
+			mousexp_ = mousex_;
+			mouseyp_ = mousey_;
+		}
 	}
 	else
 	{
@@ -146,6 +161,12 @@ void Engine::SetSize(int width, int height)
 {
 	width_ = width;
 	height_ = height;
+}
+
+void Engine::SetMaxSize(int width, int height)
+{
+	maxWidth = width;
+	maxHeight = height;
 }
 
 void Engine::Tick()

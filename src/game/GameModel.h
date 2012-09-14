@@ -98,6 +98,8 @@ public:
 	GameModel();
 	~GameModel();
 
+	Tool * GetToolFromIdentifier(std::string identifier);
+
 	void SetActiveColourPreset(int preset);
 	int GetActiveColourPreset();
 
@@ -149,6 +151,7 @@ public:
 	void SetDecoration(bool decorationState);
 	void ClearSimulation();
 	vector<Menu*> GetMenuList();
+	vector<Tool*> GetUnlistedTools();
 	vector<Tool*> GetToolList();
 	vector<QuickOption*> GetQuickOptions();
 	void SetActiveMenu(Menu * menu);

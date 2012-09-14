@@ -1,0 +1,11 @@
+TRAPDEF(-104, sin)
+TRAPDEF(-105, cos)
+TRAPDEF(-106, atan2)
+TRAPDEF(-107, sqrt)
+TRAPDEF(-108, floor)
+TRAPDEF(-109, ceil)
+
+TRAPDEF(-110, error)
+TRAPDEF(-111, print)
+TRAPDEF(-112, partCreate)
+TRAPDEF(-113, partChangeType)

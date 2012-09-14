@@ -113,7 +113,7 @@ public:
 	TagsCallback(GameController * cc_) { cc = cc_; }
 	virtual void ControllerExit()
 	{
-		cc->gameModel->SetSave(new SaveInfo(*(cc->tagsWindow->GetSave())));
+		cc->gameView->NotifySaveChanged(cc->gameModel);
 	}
 };
 
@@ -374,7 +374,7 @@ void GameController::DrawRect(int toolSelection, ui::Point point1, ui::Point poi
 	if(!activeTool || !cBrush)
 		return;
 	activeTool->SetStrength(gameModel->GetToolStrength());
-	activeTool->DrawRect(sim, cBrush, PointTranslate(point1), PointTranslate(point2));
+	activeTool->DrawRect(sim, cBrush, point1, point2);
 }
 
 void GameController::DrawLine(int toolSelection, ui::Point point1, ui::Point point2)
@@ -386,7 +386,7 @@ void GameController::DrawLine(int toolSelection, ui::Point point1, ui::Point poi
 	if(!activeTool || !cBrush)
 		return;
 	activeTool->SetStrength(gameModel->GetToolStrength());
-	activeTool->DrawLine(sim, cBrush, PointTranslate(point1), PointTranslate(point2));
+	activeTool->DrawLine(sim, cBrush, point1, point2);
 }
 
 void GameController::DrawFill(int toolSelection, ui::Point point)
@@ -398,7 +398,7 @@ void GameController::DrawFill(int toolSelection, ui::Point point)
 	if(!activeTool || !cBrush)
 		return;
 	activeTool->SetStrength(gameModel->GetToolStrength());
-	activeTool->DrawFill(sim, cBrush, PointTranslate(point));
+	activeTool->DrawFill(sim, cBrush, point);
 }
 
 void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueue)
@@ -427,7 +427,7 @@ void GameController::DrawPoints(int toolSelection, queue<ui::Point*> & pointQueu
 		bool first = true;
 		while(!pointQueue.empty())
 		{
-			ui::Point fPoint = PointTranslate(*pointQueue.front());
+			ui::Point fPoint = *pointQueue.front();
 			delete pointQueue.front();
 			pointQueue.pop();
 			if(!first)
@@ -480,7 +480,7 @@ void GameController::ToolClick(int toolSelection, ui::Point point)
 	Brush * cBrush = gameModel->GetBrush();
 	if(!activeTool || !cBrush)
 		return;
-	activeTool->Click(sim, cBrush, PointTranslate(point));
+	activeTool->Click(sim, cBrush, point);
 }
 
 void GameController::StampRegion(ui::Point point1, ui::Point point2)
@@ -525,9 +525,9 @@ bool GameController::MouseDown(int x, int y, unsigned button)
 bool GameController::MouseUp(int x, int y, unsigned button)
 {
 	bool ret = commandInterface->OnMouseUp(x, y, button);
-	if(ret && y<YRES && x<XRES)
+	if(ret && button == BUTTON_LEFT && y<YRES && x<XRES)
 	{
-		if (true)//If it's not a sign tool
+		if (gameModel->GetActiveTool(0)->GetIdentifier() != "DEFAULT_UI_SIGN")//If it's not a sign tool
 		{
 			Simulation * sim = gameModel->GetSimulation();
 			for (std::vector<sign>::iterator iter = sim->signs.begin(), end = sim->signs.end(); iter != end; ++iter)
@@ -858,6 +858,7 @@ void GameController::SetActiveColourPreset(int preset)
 void GameController::SetColour(ui::Colour colour)
 {
 	gameModel->SetColourSelectorColour(colour);
+	gameModel->SetPresetColour(colour);
 }
 
 void GameController::SetActiveMenu(Menu * menu)
@@ -972,6 +973,8 @@ void GameController::OpenElementSearch()
 			continue;
 		toolList.insert(toolList.end(), menuToolList.begin(), menuToolList.end());
 	}
+	vector<Tool*> hiddenTools = gameModel->GetUnlistedTools();
+	toolList.insert(toolList.end(), hiddenTools.begin(), hiddenTools.end());
 	new ElementSearchActivity(gameModel, toolList);
 }
 
@@ -1223,7 +1226,24 @@ void GameController::NotifyUpdateAvailable(Client * sender)
 
 		virtual void Action()
 		{
-			new ConfirmPrompt("Run Updater", "Are you sure you want to run the updater, please save any changes before updating", new UpdateConfirmation(c));
+			std::string currentVersion, newVersion;
+#ifdef BETA
+			currentVersion = MTOS(SAVE_VERSION) "." MTOS(MINOR_VERSION) " Beta, Build " MTOS(BUILD_NUM);
+#elif defined(SNAPSHOT)
+			currentVersion = "Snapshot " MTOS(SNAPSHOT_ID);
+#else
+			currentVersion = MTOS(SAVE_VERSION) "." MTOS(MINOR_VERSION) " Stable, Build " MTOS(BUILD_NUM);
+#endif
+
+			UpdateInfo info = Client::Ref().GetUpdateInfo();
+			if(info.Type == UpdateInfo::Beta)
+				newVersion = format::NumberToString<int>(info.Major) + " " + format::NumberToString<int>(info.Minor) + " Beta, Build " + format::NumberToString<int>(info.Build);
+			else if(info.Type == UpdateInfo::Snapshot)
+				newVersion = "Snapshot " + format::NumberToString<int>(info.Time);
+			else if(info.Type == UpdateInfo::Stable)
+				newVersion = format::NumberToString<int>(info.Major) + " " + format::NumberToString<int>(info.Minor) + " Stable, Build " + format::NumberToString<int>(info.Build);
+
+			new ConfirmPrompt("Run Updater", "Are you sure you want to run the updater, please save any changes before updating.\n\nCurrent version:\n " + currentVersion + "\nNew version:\n " + newVersion, new UpdateConfirmation(c));
 		}
 	};
 
