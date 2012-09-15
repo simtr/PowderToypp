@@ -272,6 +272,7 @@ void SaveButton::OnMouseUnclick(int x, int y, unsigned int button)
 
 	if(isButtonDown)
 	{
+		isButtonDown = false;
 		if(isMouseInsideAuthor)
 			DoAuthorAction();
 		else if (MouseInsideHistory)
@@ -279,8 +280,6 @@ void SaveButton::OnMouseUnclick(int x, int y, unsigned int button)
 		else
 			DoAction();
 	}
-
-	isButtonDown = false;
 }
 
 void SaveButton::OnMouseClick(int x, int y, unsigned int button)
