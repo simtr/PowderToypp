@@ -254,7 +254,7 @@ void ColourPickerActivity::OnDraw()
 			int cr = 0;
 			int cg = 0;
 			int cb = 0;
-			HSV_to_RGB(hue, 255-saturation, 255-saturation, &cr, &cg, &cb);
+			HSV_to_RGB(hue, 255-saturation, currentValue, &cr, &cg, &cb);
 
 			g->blendpixel(clamp_flt(hue, 0, 359)+offsetX, saturation+offsetY, cr, cg, cb, 255);
 		}
