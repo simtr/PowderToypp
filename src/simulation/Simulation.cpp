@@ -912,28 +912,32 @@ void Simulation::ApplyDecoration(int x, int y, int colR_, int colG_, int colB_, 
 	}
 	else if (mode == DECO_SMUDGE)
 	{
-		float tas = ta, trs = tr, tgs = tg, tbs = tb;
+		float tas = ta*255, trs = tr*255, tgs = tg*255, tbs = tb*255;
 		int rx, ry;
-		float num = 1.0f;
-		for (rx=-1; rx<2; rx++)
-			for (ry=-1; ry<2; ry++)
+		int num = 1;
+		if (!parts[rp>>8].dcolour)
+			tas = trs = tgs = tbs = num = 0;
+		for (rx=-2; rx<3; rx++)
+			for (ry=-2; ry<3; ry++)
 			{
 				if ((pmap[y+ry][x+rx]&0xFF) && parts[pmap[y+ry][x+rx]>>8].dcolour)
 				{
 					Particle part = parts[pmap[y+ry][x+rx]>>8];
 					num++;
-					tas += ((float)((part.dcolour>>24)&0xFF))/255.0f;
-					trs += ((float)((part.dcolour>>16)&0xFF))/255.0f;
-					tgs += ((float)((part.dcolour>>8)&0xFF))/255.0f;
-					tbs += ((float)((part.dcolour)&0xFF))/255.0f;
+					tas += (part.dcolour>>24)&0xFF;
+					trs += (part.dcolour>>16)&0xFF;
+					tgs += (part.dcolour>>8)&0xFF;
+					tbs += (part.dcolour)&0xFF;
 				}
 			}
 		if (num == 0)
 			return;
-		ta = ((tas/num)*0.1f) + (ta*0.9f);
-		tr = ((trs/num)*0.1f) + (tr*0.9f);
-		tg = ((tgs/num)*0.1f) + (tg*0.9f);
-		tb = ((tbs/num)*0.1f) + (tb*0.9f);
+		ta = ((int)((tas/num)+0.5f))/255.0f;
+		tr = ((int)((trs/num)+0.5f))/255.0f;
+		tg = ((int)((tgs/num)+0.5f))/255.0f;
+		tb = ((int)((tbs/num)+0.5f))/255.0f;
+		if (!parts[rp>>8].dcolour)
+			ta -= 3/255.0f;
 	}
 
 	colA_ = ta*255.0f;
