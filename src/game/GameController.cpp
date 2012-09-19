@@ -859,7 +859,6 @@ void GameController::SetColour(ui::Colour colour)
 {
 	gameModel->SetColourSelectorColour(colour);
 	gameModel->SetPresetColour(colour);
-	gameModel->SetActiveTool(0, gameModel->GetToolFromIdentifier("DEFAULT_DECOR_SET"));
 }
 
 void GameController::SetActiveMenu(Menu * menu)
