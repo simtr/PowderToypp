@@ -61,13 +61,26 @@ namespace vm
 
 	TRAPDEF(partCreate)
 	{
-		printf("%d, %d, %d, %d\n", ARG(0).int4, ARG(1).int4, ARG(2).int4, ARG(3).int4);
-		Push<int4_t>(0);
-		//Push<int4_t>(sim->create_part(ARG(0).int4, ARG(1).int4, ARG(2).int4, ARG(3).int4));
+		Push<int4_t>(sim->create_part(ARG(0).int4, ARG(1).int4, ARG(2).int4, ARG(3).int4));
 	}
 
 	TRAPDEF(partChangeType)
 	{
 		sim->part_change_type(ARG(0).int4, ARG(1).int4, ARG(2).int4, ARG(3).int4);
+	}
+
+	TRAPDEF(pmapData)
+	{
+		Push<int4_t>(sim->pmap[ARG(1).int4][ARG(0).int4]);
+	}
+
+	TRAPDEF(deletePart)
+	{
+		sim->delete_part(ARG(0).int4, ARG(1).int4, ARG(2).int4);
+	}
+
+	TRAPDEF(killPart)
+	{
+		sim->kill_part(ARG(0).int4);
 	}
 }
