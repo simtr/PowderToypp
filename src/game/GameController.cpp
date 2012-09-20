@@ -213,7 +213,7 @@ void GameController::HistoryRestore()
 
 void GameController::HistorySnapshot()
 {
-	std::deque<Snapshot*> history = gameModel->GetHistory();
+	/*std::deque<Snapshot*> history = gameModel->GetHistory();
 	Snapshot * newSnap = gameModel->GetSimulation()->CreateSnapshot();
 	if(newSnap)
 	{
@@ -226,7 +226,7 @@ void GameController::HistorySnapshot()
 		}
 		history.push_back(newSnap);
 		gameModel->SetHistory(history);
-	}
+	}*/
 }
 
 GameView * GameController::GetView()
