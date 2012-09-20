@@ -186,7 +186,7 @@ void ColourPickerActivity::OnMouseDown(int x, int y, unsigned button)
 			currentHue = 0;
 	}
 
-	if(x > 0 && x < 256 && y > 259 && y < 282)
+	if(x > 0 && x < 256 && y > 259 && y < 272)
 	{
 		valueMouseDown = true;
 		currentValue = x;
