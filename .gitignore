@@ -37,6 +37,9 @@ Makefile.me
 *.lib
 *.ipch
 *.log
+*.idb
+*.txt
+*.lua
 *.lastbuildstate
 *.unsuccessfulbuild
 *.pdb
