@@ -23,7 +23,7 @@ namespace ui
 	class Window;
 }
 
-namespace vm
+namespace pim
 {
 	class VirtualMachine;
 }
@@ -45,7 +45,8 @@ namespace vm
 #define LUACON_EL_MODIFIED_MENUS 0x4
 
 class TPTScriptInterface;
-class LuaScriptInterface: public CommandInterface {
+class LuaScriptInterface: public CommandInterface
+{
 	int luacon_mousex, luacon_mousey, luacon_selectedl, luacon_selectedr, luacon_mousebutton, luacon_brushx, luacon_brushy;
 	bool luacon_mousedown;
 	bool currentCommand;
@@ -63,9 +64,10 @@ class LuaScriptInterface: public CommandInterface {
 	static int renderer_renderModes(lua_State * l);
 	static int renderer_displayModes(lua_State * l);
 	static int renderer_colourMode(lua_State * l);
+	static int renderer_decorations(lua_State * l);
 
 	//Elements
-	static vm::VirtualMachine * updateVirtualMachines[PT_NUM];
+	static pim::VirtualMachine * updateVirtualMachines[PT_NUM];
 	static int updateVM(UPDATE_FUNC_ARGS);
 	//
 	void initElementsAPI();
@@ -84,6 +86,25 @@ class LuaScriptInterface: public CommandInterface {
 	//VM
 	void initVirtualMachineAPI();
 	static int virtualMachine_loadProgram(lua_State * l);
+
+	void initGraphicsAPI();
+	static int graphics_textSize(lua_State * l);
+	static int graphics_drawText(lua_State * l);
+	static int graphics_drawLine(lua_State * l);
+	static int graphics_drawRect(lua_State * l);
+	static int graphics_fillRect(lua_State * l);
+
+	void initFileSystemAPI();
+	static int fileSystem_list(lua_State * l);
+	static int fileSystem_exists(lua_State * l);
+	static int fileSystem_isFile(lua_State * l);
+	static int fileSystem_isDirectory(lua_State * l);
+	static int fileSystem_makeDirectory(lua_State * l);
+	static int fileSystem_removeDirectory(lua_State * l);
+	static int fileSystem_removeFile(lua_State * l);
+	static int fileSystem_move(lua_State * l);
+	static int fileSystem_copy(lua_State * l);
+
 public:
 	ui::Window * Window;
 	lua_State *l;

@@ -127,12 +127,11 @@ void Client::Initialise(std::string proxyString)
 	//Read stamps library
 	std::ifstream stampsLib;
 	stampsLib.open(STAMPS_DIR PATH_SEP "stamps.def", std::ios::binary);
-	while(true)
+	while(!stampsLib.eof())
 	{
 		char data[11];
 		memset(data, 0, 11);
-		if(stampsLib.readsome(data, 10)!=10)
-			break;
+		stampsLib.read(data, 10);
 		if(!data[0])
 			break;
 		stampIDs.push_back(data);
@@ -766,6 +765,9 @@ RequestStatus Client::UploadSave(SaveInfo & save)
 		int postLengths[] = { save.GetName().length(), save.GetDescription().length(), gameDataLength, save.GetPublished()?6:7 };
 		//std::cout << postNames[0] << " " << postDatas[0] << " " << postLengths[0] << std::endl;
 		data = http_multipart_post("http://" SERVER "/Save.api", postNames, postDatas, postLengths, (char *)(userIDStream.str().c_str()), NULL, (char *)(authUser.SessionID.c_str()), &dataStatus, &dataLength);
+
+		delete[] saveDescription;
+		delete[] saveName;
 	}
 	else
 	{

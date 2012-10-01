@@ -62,59 +62,64 @@ else:
 if GetOption("toolprefix"):
 	env['CC'] = GetOption("toolprefix")+env['CC']
 	env['CXX'] = GetOption("toolprefix")+env['CXX']
-	env['RC'] = GetOption("toolprefix")+env['RC']
+	if GetOption('win'):
+		env['RC'] = GetOption("toolprefix")+env['RC']
 
 #Check for headers and libraries
-conf = Configure(env)
+if not GetOption("macosx"):
+	conf = Configure(env)
 
-try:
-	env.ParseConfig('sdl-config --cflags')
-	env.ParseConfig('sdl-config --libs')
-except:
-	conf.CheckLib("SDL")
-	if(GetOption("sdl-dir")):
-		if not conf.CheckCHeader(GetOption("sdl-dir") + '/SDL.h'):
-			print "sdl headers not found or not installed"
+	try:
+		env.ParseConfig('sdl-config --cflags')
+		env.ParseConfig('sdl-config --libs')
+	except:
+		conf.CheckLib("SDL")
+		if(GetOption("sdl-dir")):
+			if not conf.CheckCHeader(GetOption("sdl-dir") + '/SDL.h'):
+				print "sdl headers not found or not installed"
+				raise SystemExit(1)
+			else:
+				env.Append(CPPPATH=GetOption("sdl-dir"))
+
+	#Find correct lua include dir
+	try:
+		env.ParseConfig('pkg-config --cflags lua5.1')
+	except:
+		if(GetOption("lua-dir")):
+			if not conf.CheckCHeader(GetOption("lua-dir") + '/lua.h'):
+				print "lua5.1 headers not found or not installed"
+				raise SystemExit(1)
+			else:
+				env.Append(CPPPATH=GetOption("lua-dir"))
+
+	#Check for FFT lib
+	if not conf.CheckLib('fftw3f') and not conf.CheckLib('fftw3f-3'):
+		print "libfftw3f not found or not installed"
+		raise SystemExit(1)
+
+	#Check for Bzip lib
+	if not conf.CheckLib('bz2'):
+		print "libbz2 not found or not installed"
+		raise SystemExit(1)
+
+	#Check for zlib
+	if not conf.CheckLib('z'):
+		print "libz not found or not installed"
+		raise SystemExit(1)
+
+	if not conf.CheckCHeader("bzlib.h"):
+		print "bzip2 headers not found"
+		raise SystemExit(1)
+
+	#Check for Lua lib
+	if not GetOption("macosx"):
+		if not conf.CheckLib('lua') and not conf.CheckLib('lua5.1') and not conf.CheckLib('lua51') and not conf.CheckLib('lua-5.1'):
+			print "liblua not found or not installed"
 			raise SystemExit(1)
-		else:
-			env.Append(CPPPATH=GetOption("sdl-dir"))
 
-#Find correct lua include dir
-try:
-	env.ParseConfig('pkg-config --cflags lua5.1')
-except:
-	if(GetOption("lua-dir")):
-		if not conf.CheckCHeader(GetOption("lua-dir") + '/lua.h'):
-			print "lua5.1 headers not found or not installed"
-			raise SystemExit(1)
-		else:
-			env.Append(CPPPATH=GetOption("lua-dir"))
-
-#Check for FFT lib
-if not conf.CheckLib('fftw3f') and not conf.CheckLib('fftw3f-3'):
-	print "libfftw3f not found or not installed"
-	raise SystemExit(1)
-
-#Check for Bzip lib
-if not conf.CheckLib('bz2'):
-	print "libbz2 not found or not installed"
-	raise SystemExit(1)
-
-#Check for zlib
-if not conf.CheckLib('z'):
-	print "libz not found or not installed"
-	raise SystemExit(1)
-
-if not conf.CheckCHeader("bzlib.h"):
-	print "bzip2 headers not found"
-	raise SystemExit(1)
-
-#Check for Lua lib
-if not conf.CheckLib('lua') and not conf.CheckLib('lua5.1') and not conf.CheckLib('lua51') and not conf.CheckLib('lua-5.1'):
-	print "liblua not found or not installed"
-	raise SystemExit(1)
-
-env = conf.Finish();
+	env = conf.Finish();
+else:
+	env.Append(LIBS=['z', 'bz2', 'fftw3f'])
 
 env.Append(CPPPATH=['src/', 'data/', 'generated/'])
 env.Append(CCFLAGS=['-w', '-std=c99', '-fkeep-inline-functions'])
@@ -142,6 +147,26 @@ if(GetOption('lin')):
 	openGLLibs = ['GL']
 	env.Append(LIBS=['X11', 'rt'])
 	env.Append(CPPDEFINES=["LIN"])
+	if GetOption('_64bit'):
+		env.Append(LINKFAGS=['-m64'])
+		env.Append(CCFLAGS=['-m64'])
+	else:
+		env.Append(LINKFLAGS=['-m32'])
+		env.Append(CCFLAGS=['-m32'])
+if(GetOption('macosx')):
+	env.Append(CPPDEFINES=["MACOSX"])
+	env.Append(CCFLAGS=['-I/Library/Frameworks/SDL.framework/Headers'])
+	env.Append(CCFLAGS=['-I/Library/Frameworks/Lua.framework/Headers'])
+	env.Append(LINKFLAGS=['-lfftw3f'])
+	env.Append(LINKFLAGS=['-framework'])
+	env.Append(LINKFLAGS=['SDL'])
+	env.Append(LINKFLAGS=['-framework'])
+	env.Append(LINKFLAGS=['Lua'])
+	env.Append(LINKFLAGS=['-framework']);
+	env.Append(LINKFLAGS=['Cocoa'])
+	#env.Append(LINKFLAGS=['-framework SDL'])
+	#env.Append(LINKFLAGS=['-framework Lua'])
+	#env.Append(LINKFLAGS=['-framework Cocoa'])
 	if GetOption('_64bit'):
 		env.Append(LINKFAGS=['-m64'])
 		env.Append(CCFLAGS=['-m64'])
@@ -205,6 +230,8 @@ elif(GetOption('opengl-renderer')):
 	raise SystemExit(1)
 
 sources=Glob("src/*.cpp")
+if(GetOption('macosx')):
+	sources +=["SDLMain.m"]
 if(GetOption('win')):
 	sources += env.RES('resources/powder-res.rc')
 sources+=Glob("src/*/*.cpp")
@@ -236,7 +263,10 @@ if(GetOption('win')):
 	programName += ".exe"
 
 if(GetOption('release')):
-	env.Append(CCFLAGS=['-O3', '-ftree-vectorize', '-funsafe-math-optimizations', '-ffast-math', '-fomit-frame-pointer', '-funsafe-loop-optimizations', '-Wunsafe-loop-optimizations'])
+	if GetOption('macosx'):
+		env.Append(CCFLAGS=['-O3', '-ftree-vectorize', '-funsafe-math-optimizations', '-ffast-math', '-fomit-frame-pointer'])
+	else:
+		env.Append(CCFLAGS=['-O3', '-ftree-vectorize', '-funsafe-math-optimizations', '-ffast-math', '-fomit-frame-pointer', '-funsafe-loop-optimizations', '-Wunsafe-loop-optimizations'])
 
 if(GetOption('win')):
 	envCopy = env.Clone()

@@ -146,7 +146,7 @@ public:
 
 GameView::GameView():
 	ui::Window(ui::Point(0, 0), ui::Point(XRES+BARSIZE, YRES+MENUSIZE)),
-	pointQueue(queue<ui::Point*>()),
+	pointQueue(queue<ui::Point>()),
 	isMouseDown(false),
 	ren(NULL),
 	activeBrush(NULL),
@@ -446,7 +446,8 @@ public:
 	MenuAction(GameView * _v, Menu * menu_) { v = _v; menu = menu_; }
 	void MouseEnterCallback(ui::Button * sender)
 	{
-		v->c->SetActiveMenu(menu);
+		if(!ui::Engine::Ref().GetMouseButton())
+			v->c->SetActiveMenu(menu);
 	}
 	void ActionCallback(ui::Button * sender)
 	{
@@ -926,8 +927,8 @@ void GameView::OnMouseMove(int x, int y, int dx, int dy)
 	currentMouse = ui::Point(x, y);
 	if(isMouseDown && drawMode == DrawPoints)
 	{
-		pointQueue.push(new ui::Point(c->PointTranslate(ui::Point(x-dx, y-dy))));
-		pointQueue.push(new ui::Point(c->PointTranslate(ui::Point(x, y))));
+		pointQueue.push(ui::Point(c->PointTranslate(ui::Point(x-dx, y-dy))));
+		pointQueue.push(ui::Point(c->PointTranslate(ui::Point(x, y))));
 	}
 }
 
@@ -961,7 +962,7 @@ void GameView::OnMouseDown(int x, int y, unsigned button)
 		}
 		if(drawMode == DrawPoints)
 		{
-			pointQueue.push(new ui::Point(c->PointTranslate(ui::Point(x, y))));
+			pointQueue.push(ui::Point(c->PointTranslate(ui::Point(x, y))));
 		}
 	}
 }
@@ -1050,7 +1051,7 @@ void GameView::OnMouseUp(int x, int y, unsigned button)
 			if(drawMode == DrawPoints)
 			{
 				c->ToolClick(toolIndex, c->PointTranslate(ui::Point(x, y)));
-				//pointQueue.push(new ui::Point(x, y));
+				//pointQueue.push(ui::Point(x, y));
 			}
 			if(drawModeReset)
 			{
@@ -1117,7 +1118,7 @@ void GameView::OnMouseWheel(int x, int y, int d)
 		c->AdjustBrushSize(d, false, shiftBehaviour, ctrlBehaviour);
 		if(isMouseDown)
 		{
-			pointQueue.push(new ui::Point(c->PointTranslate(ui::Point(x, y))));
+			pointQueue.push(ui::Point(c->PointTranslate(ui::Point(x, y))));
 		}
 	}
 }
@@ -1180,7 +1181,8 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 				break;
 			}
 		}
-		return;
+		if(key != ' ')
+			return;
 	}
 	switch(key)
 	{
@@ -1405,7 +1407,7 @@ void GameView::OnTick(float dt)
 	{
 		if(isMouseDown)
 		{
-			pointQueue.push(new ui::Point(c->PointTranslate(currentMouse)));
+			pointQueue.push(ui::Point(c->PointTranslate(currentMouse)));
 		}
 		if(!pointQueue.empty())
 		{

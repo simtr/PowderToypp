@@ -206,6 +206,31 @@ void Textbox::pasteIntoSelection()
 				*iter = '0';
 		}
 	}
+
+	int regionWidth = Size.X;
+	if(Appearance.icon)
+		regionWidth -= 13;
+	regionWidth -= Appearance.Margin.Left;
+	regionWidth -= Appearance.Margin.Right;
+
+	if(limit!=std::string::npos)
+	{
+		if(limit-backingText.length() >= 0)
+			newText = newText.substr(0, limit-backingText.length());
+		else
+			newText = "";
+	}
+	else if(!multiline && Graphics::textwidth((char*)std::string(backingText+newText).c_str()) > regionWidth)
+	{
+		int pLimit = regionWidth - Graphics::textwidth((char*)backingText.c_str());
+		int cIndex = Graphics::CharIndexAtPosition((char *)newText.c_str(), pLimit, 0);
+
+		if(cIndex > 0)
+			newText = newText.substr(0, cIndex);
+		else
+			newText = "";
+	}
+
 	backingText.insert(cursor, newText);
 	cursor = cursor+newText.length();
 	ClearSelection();
@@ -226,7 +251,10 @@ void Textbox::pasteIntoSelection()
 	if(multiline)
 		updateMultiline();
 	updateSelection();
-	TextPosition(text);
+	if(multiline)
+		TextPosition(textLines);
+	else
+		TextPosition(text);
 
 	if(cursor)
 	{
@@ -434,7 +462,10 @@ void Textbox::OnVKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	if(multiline)
 		updateMultiline();
 	updateSelection();
-	TextPosition(text);
+	if(multiline)
+		TextPosition(textLines);
+	else
+		TextPosition(text);
 
 	if(cursor)
 	{

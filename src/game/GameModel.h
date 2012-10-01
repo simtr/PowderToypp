@@ -58,7 +58,9 @@ private:
 	Simulation * sim;
 	Renderer * ren;
 	Tool * lastTool;
-	Tool * activeTools[3];
+	Tool ** activeTools;
+	Tool * decoToolset[3];
+	Tool * regularToolset[3];
 	User currentUser;
 	float toolStrength;
 	std::deque<Snapshot*> history;
@@ -67,6 +69,8 @@ private:
 	std::vector<ui::Colour> colourPresets;
 	bool colourSelector;
 	ui::Colour colour;
+
+	int edgeMode;
 
 	std::string infoTip;
 	std::string toolTip;
@@ -99,6 +103,9 @@ public:
 	~GameModel();
 
 	Tool * GetToolFromIdentifier(std::string identifier);
+
+	void SetEdgeMode(int edgeMode);
+	int GetEdgeMode();
 
 	void SetActiveColourPreset(int preset);
 	int GetActiveColourPreset();
