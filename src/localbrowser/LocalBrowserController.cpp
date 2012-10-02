@@ -53,10 +53,10 @@ void LocalBrowserController::RemoveSelected()
 	};
 
 	std::stringstream desc;
-	desc << "Are you sure you want to delete " << browserModel->GetSelected().size() << " saves";
+	desc << "Are you sure you want to delete " << browserModel->GetSelected().size() << " stamp";
 	if(browserModel->GetSelected().size()>1)
 		desc << "s";
-	new ConfirmPrompt("Delete saves", desc.str(), new RemoveSelectedConfirmation(this));
+	new ConfirmPrompt("Delete stamps", desc.str(), new RemoveSelectedConfirmation(this));
 }
 
 void LocalBrowserController::removeSelectedC()
@@ -72,7 +72,7 @@ void LocalBrowserController::removeSelectedC()
 			for(int i = 0; i < saves.size(); i++)
 			{
 				std::stringstream saveName;
-				saveName << "Deleting save [" << saves[i] << "] ...";
+				saveName << "Deleting stamp [" << saves[i] << "] ...";
  				notifyStatus(saveName.str());
  				Client::Ref().DeleteStamp(saves[i]);
 				notifyProgress((float(i+1)/float(saves.size())*100));
@@ -81,12 +81,13 @@ void LocalBrowserController::removeSelectedC()
 		}
 		virtual void after()
 		{
+			Client::Ref().updateStamps();
 			c->RefreshSavesList();
 		}
 	};
 
 	std::vector<std::string> selected = browserModel->GetSelected();
-	new TaskWindow("Removing saves", new RemoveSavesTask(this, selected));
+	new TaskWindow("Removing stamps", new RemoveSavesTask(this, selected));
 }
 
 void LocalBrowserController::UnDeleteStamps()
