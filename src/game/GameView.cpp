@@ -1626,10 +1626,7 @@ void GameView::enableShiftBehaviour()
 		shiftBehaviour = true;
 		if(isMouseDown)
 		{
-			if(!ctrlBehaviour)
-				c->SetToolStrength(10.0f);
-			else
-				c->SetToolStrength(1.0f);
+			c->SetToolStrength(10.0f);
 		}
 	}
 }
@@ -1678,7 +1675,7 @@ void GameView::enableCtrlBehaviour()
 			if(!shiftBehaviour)
 				c->SetToolStrength(.1f);
 			else
-				c->SetToolStrength(1.0f);
+				c->SetToolStrength(10.0f);
 		}
 	}
 }
