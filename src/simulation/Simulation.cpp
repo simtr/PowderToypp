@@ -3909,7 +3909,7 @@ void Simulation::update_particles_i(int start, int inc)
 					else s = 0;
 				}
 				else s = 0;
-			} else if (pv[y/CELL][x/CELL]<elements[t].LowPressure&&gravtot<=(elements[elements[t].LowPressureTransition].HighPressure/4.0f)&&elements[t].LowPressureTransition>-1) {
+			} else if (pv[y/CELL][x/CELL]<elements[t].LowPressure&&elements[t].LowPressureTransition>-1&&gravtot<=(elements[elements[t].LowPressureTransition].HighPressure/4.0f)) {
 				// particle type change due to low pressure
 				if (elements[t].LowPressureTransition!=PT_NUM)
 					t = elements[t].LowPressureTransition;
