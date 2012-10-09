@@ -42,14 +42,40 @@ Element_LAVA::Element_LAVA()
     HighTemperature = ITH;
     HighTemperatureTransition = NT;
     
-    Update = &Element_FIRE::update;
+    Update = &Element_LAVA::update;
     Graphics = &Element_LAVA::graphics;
 }
 
+//#TPT-Directive ElementHeader Element_LAVA static int update(UPDATE_FUNC_ARGS)
+int Element_LAVA::update(UPDATE_FUNC_ARGS)
+{
+	Element_FIRE::update(UPDATE_FUNC_SUBCALL_ARGS);
+	if (sim->pv[y/CELL][x/CELL] > -200 || parts[i].ctype != PT_IRON)
+		return 0;
+	int r, rx, ry, foundTTAN = 0, foundQRTZ = 0;
+	for (rx=-1; rx<2; rx++)
+		for (ry=-1; ry<2; ry++)
+			if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
+			{
+				r = pmap[y+ry][x+rx];
+				if ((r&0xFF) != PT_LAVA)
+					continue;
+				if (parts[r>>8].ctype == PT_TTAN)
+					foundTTAN = r;
+				else if (parts[r>>8].ctype == PT_QRTZ)
+					foundQRTZ= r;
+			}
+	if (foundQRTZ && foundTTAN)
+	{
+		sim->kill_part(foundTTAN>>8);
+		sim->kill_part(foundQRTZ>>8);
+		sim->part_change_type(i, x, y, PT_VIBR);
+	}
+	return 0;
+}
 
 //#TPT-Directive ElementHeader Element_LAVA static int graphics(GRAPHICS_FUNC_ARGS)
 int Element_LAVA::graphics(GRAPHICS_FUNC_ARGS)
-
 {
 	*colr = cpart->life * 2 + 0xE0;
 	*colg = cpart->life * 1 + 0x50;
