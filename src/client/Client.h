@@ -68,6 +68,7 @@ private:
 	int activeThumbRequestTimes[IMGCONNS];
 	int activeThumbRequestCompleteTimes[IMGCONNS];
 	std::string activeThumbRequestIDs[IMGCONNS];
+	void updateStamps();
 	static std::vector<std::string> explodePropertyString(std::string property);
 	void notifyUpdateAvailable();
 	void notifyAuthUserChanged();
@@ -111,8 +112,7 @@ public:
 	void DeleteStamp(std::string stampID);
 	std::string AddStamp(GameSave * saveData);
 	std::vector<std::string> GetStamps(int start, int count);
-	void updateStamps();
-	void UnDeleteStamps();
+	void RescanStamps();
 	int GetStampsCount();
 	SaveFile * GetFirstStamp();
 

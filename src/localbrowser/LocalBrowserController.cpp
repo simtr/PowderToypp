@@ -96,6 +96,30 @@ void LocalBrowserController::UnDeleteStamps()
 	browserModel->UpdateSavesList(browserModel->GetPageNum());
 }
 
+void LocalBrowserController::RescanStamps()
+{
+	class RescanConfirmation: public ConfirmDialogueCallback {
+	public:
+		LocalBrowserController * c;
+		RescanConfirmation(LocalBrowserController * c_) {	c = c_;	}
+		virtual void ConfirmCallback(ConfirmPrompt::DialogueResult result) {
+			if (result == ConfirmPrompt::ResultOkay)
+				c->rescanStampsC();
+		}
+		virtual ~RescanConfirmation() { }
+	};
+
+	std::stringstream desc;
+	desc << "Rescanning the stamps folder can find stamps added to the stamps folder or recover stamps when the stamps.def file has been lost or damaged. However, be warned that this may mess up the current sorting order";
+	new ConfirmPrompt("Rescan", desc.str(), new RescanConfirmation(this));
+}
+
+void LocalBrowserController::rescanStampsC()
+{
+	browserModel->RescanStamps();
+	browserModel->UpdateSavesList(browserModel->GetPageNum());
+}
+
 void LocalBrowserController::RefreshSavesList()
 {
 	ClearSelection();

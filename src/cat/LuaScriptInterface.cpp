@@ -39,6 +39,10 @@
 #include "LuaSlider.h"
 #include "LuaProgressBar.h"
 
+#ifdef __unix__
+#include <unistd.h>
+#endif
+
 extern "C"
 {
 #ifdef WIN
@@ -303,10 +307,9 @@ tpt.partsdata = nil");
 
 void LuaScriptInterface::Init()
 {
-	if(luacon_eval("dofile(\"autorun.lua\")"))
-	{
-		luacon_ci->Log(CommandInterface::LogError, luacon_geterror());
-	}
+	if(Client::Ref().FileExists("autorun.lua"))		
+		if(luacon_eval("dofile(\"autorun.lua\")"))
+			luacon_ci->Log(CommandInterface::LogError, luacon_geterror());
 }
 
 void LuaScriptInterface::SetWindow(ui::Window * window)
