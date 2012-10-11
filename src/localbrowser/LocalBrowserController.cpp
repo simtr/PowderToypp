@@ -81,19 +81,12 @@ void LocalBrowserController::removeSelectedC()
 		}
 		virtual void after()
 		{
-			Client::Ref().updateStamps();
 			c->RefreshSavesList();
 		}
 	};
 
 	std::vector<std::string> selected = browserModel->GetSelected();
 	new TaskWindow("Removing stamps", new RemoveSavesTask(this, selected));
-}
-
-void LocalBrowserController::UnDeleteStamps()
-{
-	browserModel->UnDeleteStamps();
-	browserModel->UpdateSavesList(browserModel->GetPageNum());
 }
 
 void LocalBrowserController::RescanStamps()
