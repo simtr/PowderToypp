@@ -1184,11 +1184,13 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 	if (!placingSave) //disable opening interfaces when placing a save
 		switch(key)
 		{
-		case KEY_MOD_ALT:
+		case KEY_LALT:
+		case KEY_RALT:
 			drawSnap = true;
 			enableAltBehaviour();
 			break;
-		case KEY_MOD_CONTROL:
+		case KEY_LCTRL:
+		case KEY_RCTRL:
 			if(!isMouseDown)
 			{
 				if(drawModeReset)
@@ -1202,7 +1204,8 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 			}
 			enableCtrlBehaviour();
 			break;
-		case KEY_MOD_SHIFT:
+		case KEY_LSHIFT:
+		case KEY_RSHIFT:
 			if(!isMouseDown)
 			{
 				if(drawModeReset)
@@ -1370,14 +1373,17 @@ void GameView::OnKeyRelease(int key, Uint16 character, bool shift, bool ctrl, bo
 		drawModeReset = true;
 	switch(key)
 	{
-	case KEY_MOD_ALT:
+	case KEY_LALT:
+	case KEY_RALT:
 		drawSnap = false;
 		disableAltBehaviour();
 		break;
-	case KEY_MOD_CONTROL:
+	case KEY_LCTRL:
+	case KEY_RCTRL:
 		disableCtrlBehaviour();
 		break;
-	case KEY_MOD_SHIFT:
+	case KEY_LSHIFT:
+	case KEY_RSHIFT:
 		disableShiftBehaviour();
 		break;
 	case 'z':
