@@ -1137,6 +1137,7 @@ void GameView::BeginStampSelection()
 
 void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool alt)
 {
+	bool placingSave = false;
 	if(introText > 50)
 	{
 		introText = 50;
@@ -1178,43 +1179,97 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 				break;
 			}
 		}
-		if(key != ' ')
-			return;
+		placingSave = true;
 	}
-	switch(key)
-	{
-	case KEY_MOD_ALT:
-		drawSnap = true;
-		enableAltBehaviour();
-		break;
-	case KEY_MOD_CONTROL:
-		if(!isMouseDown)
+	if (!placingSave) //disable opening interfaces when placing a save
+		switch(key)
 		{
-			if(drawModeReset)
-				drawModeReset = false;
-			else
-				drawPoint1 = currentMouse;
-			if(shift)
-				drawMode = DrawFill;
-			else
-				drawMode = DrawRect;
-		}
-		enableCtrlBehaviour();
-		break;
-	case KEY_MOD_SHIFT:
-		if(!isMouseDown)
-		{
-			if(drawModeReset)
-				drawModeReset = false;
-			else
-				drawPoint1 = currentMouse;
+		case KEY_MOD_ALT:
+			drawSnap = true;
+			enableAltBehaviour();
+			break;
+		case KEY_MOD_CONTROL:
+			if(!isMouseDown)
+			{
+				if(drawModeReset)
+					drawModeReset = false;
+				else
+					drawPoint1 = currentMouse;
+				if(shift)
+					drawMode = DrawFill;
+				else
+					drawMode = DrawRect;
+			}
+			enableCtrlBehaviour();
+			break;
+		case KEY_MOD_SHIFT:
+			if(!isMouseDown)
+			{
+				if(drawModeReset)
+					drawModeReset = false;
+				else
+					drawPoint1 = currentMouse;
+				if(ctrl)
+					drawMode = DrawFill;
+				else
+					drawMode = DrawLine;
+			}
+			enableShiftBehaviour();
+			break;
+		case 'c':
 			if(ctrl)
-				drawMode = DrawFill;
+			{
+				selectMode = SelectCopy;
+				selectPoint1 = ui::Point(-1, -1);
+				infoTip = "\x0F\xEF\xEF\x10Select an area to copy";
+				infoTipPresence = 120;
+			}
+			break;
+		case 'x':
+			if(ctrl)
+			{
+				selectMode = SelectCut;
+				selectPoint1 = ui::Point(-1, -1);
+				infoTip = "\x0F\xEF\xEF\x10Select an area to cut";
+				infoTipPresence = 120;
+			}
+			break;
+		case 'v':
+			if(ctrl)
+			{
+				c->LoadClipboard();
+				selectPoint2 = ui::Point(-1, -1);
+				selectPoint1 = selectPoint2;
+			}
+			break;
+		case 'l':
+			c->LoadStamp();
+			selectPoint2 = ui::Point(-1, -1);
+			selectPoint1 = selectPoint2;
+			isMouseDown = false;
+			drawMode = DrawPoints;
+			break;
+		case 'k':
+			selectPoint2 = ui::Point(-1, -1);
+			selectPoint1 = selectPoint2;
+			c->OpenStamps();
+			break;
+		case ']':
+			if(zoomEnabled && !zoomCursorFixed)
+				c->AdjustZoomSize(1, !alt);
 			else
-				drawMode = DrawLine;
+				c->AdjustBrushSize(1, !alt, shiftBehaviour, ctrlBehaviour);
+			break;
+		case '[':
+			if(zoomEnabled && !zoomCursorFixed)
+				c->AdjustZoomSize(-1, !alt);
+			else
+				c->AdjustBrushSize(-1, !alt, shiftBehaviour, ctrlBehaviour);
+			break;
 		}
-		enableShiftBehaviour();
-		break;
+
+	switch (key)
+	{
 	case ' ': //Space
 		c->SetPaused();
 		break;
@@ -1290,56 +1345,6 @@ void GameView::OnKeyPress(int key, Uint16 character, bool shift, bool ctrl, bool
 			c->ResetSpark();
 		else
 			c->ResetAir();
-		break;
-	case 'c':
-		if(ctrl)
-		{
-			selectMode = SelectCopy;
-			selectPoint1 = ui::Point(-1, -1);
-			infoTip = "\x0F\xEF\xEF\x10Select an area to copy";
-			infoTipPresence = 120;
-		}
-		break;
-	case 'x':
-		if(ctrl)
-		{
-			selectMode = SelectCut;
-			selectPoint1 = ui::Point(-1, -1);
-			infoTip = "\x0F\xEF\xEF\x10Select an area to cut";
-			infoTipPresence = 120;
-		}
-		break;
-	case 'v':
-		if(ctrl)
-		{
-			c->LoadClipboard();
-			selectPoint2 = ui::Point(-1, -1);
-			selectPoint1 = selectPoint2;
-		}
-		break;
-	case 'l':
-		c->LoadStamp();
-		selectPoint2 = ui::Point(-1, -1);
-		selectPoint1 = selectPoint2;
-		isMouseDown = false;
-		drawMode = DrawPoints;
-		break;
-	case 'k':
-		selectPoint2 = ui::Point(-1, -1);
-		selectPoint1 = selectPoint2;
-		c->OpenStamps();
-		break;
-	case ']':
-		if(zoomEnabled && !zoomCursorFixed)
-			c->AdjustZoomSize(1, !alt);
-		else
-			c->AdjustBrushSize(1, !alt, shiftBehaviour, ctrlBehaviour);
-		break;
-	case '[':
-		if(zoomEnabled && !zoomCursorFixed)
-			c->AdjustZoomSize(-1, !alt);
-		else
-			c->AdjustBrushSize(-1, !alt, shiftBehaviour, ctrlBehaviour);
 		break;
 	case 'i':
 		if(ctrl)
