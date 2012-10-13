@@ -141,7 +141,7 @@ int Simulation::Load(int fullX, int fullY, GameSave * save)
 
 GameSave * Simulation::Save()
 {
-	return Save(0, 0, XRES, YRES);
+	return Save(0, 0, XRES-1, YRES-1);
 }
 
 GameSave * Simulation::Save(int fullX, int fullY, int fullX2, int fullY2)
@@ -300,7 +300,7 @@ void Simulation::clear_area(int area_x, int area_y, int area_w, int area_h)
 			delete_part(cx+area_x, cy+area_y, 0);
 		}
 	}
-	for(int i = 0; i < MAXSIGNS && i < signs.size(); i++)
+	for(int i = 0; i < signs.size(); i++)
 	{
 		if(signs[i].text.length() && signs[i].x >= area_x && signs[i].y >= area_y && signs[i].x <= area_x+area_w && signs[i].y <= area_y+area_h)
 		{
