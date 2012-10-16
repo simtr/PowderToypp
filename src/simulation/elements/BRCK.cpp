@@ -73,11 +73,14 @@ int Element_BRCK::graphics(GRAPHICS_FUNC_ARGS)
 		*colb += 100;
 	}
 
-	*pixel_mode |= FIRE_ADD;
-	*firea = 40;
-    *firer = *colr;
-    *fireg = *colg;
-    *fireb = *colb;
+	if (cpart->tmp)
+	{
+		*pixel_mode |= FIRE_ADD;
+		*firea = 40;
+		*firer = *colr;
+		*fireg = *colg;
+		*fireb = *colb;
+	}
     return 0;  
 }
 
