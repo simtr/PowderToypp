@@ -31,7 +31,7 @@ Element_NOTE::Element_NOTE()
     Description = "PSCN to turn on, NSCN to turn off, metal for percussion.";
     
     State = ST_NONE;
-    Properties = TYPE_PART|PROP_LIFE_DEC|PROP_LIFE_KILL_DEC|PROP_SPARKSETTLE;
+    Properties = TYPE_SOLID;
     
     LowPressure = IPL;
     LowPressureTransition = NT;
