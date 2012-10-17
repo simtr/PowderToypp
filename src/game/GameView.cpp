@@ -282,7 +282,8 @@ GameView::GameView():
         DownVoteAction(GameView * _v) { v = _v; }
         void ActionCallback(ui::Button * sender)
         {
-        	v->c->Vote(-1);
+			if(ConfirmPrompt::Blocking("Downvote", "Are you sure you want to vote down on this?", "Confirm"))
+        		v->c->Vote(-1);
         }
     };
     downVoteButton = new ui::Button(ui::Point(currentX, Size.Y-16), ui::Point(15, 15), "", "Dislike this save");
