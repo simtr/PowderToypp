@@ -101,7 +101,7 @@ public:
 	void SetToolStrength(float value);
 	void LoadSaveFile(SaveFile * file);
 	void LoadSave(SaveInfo * save);
-	void OpenSearch();
+	void OpenSearch(std::string searchText);
 	void OpenLogin();
 	void OpenTags();
 	void OpenSavePreview(int saveID, int saveDate);

@@ -60,6 +60,7 @@ public:
 	void NotifyAuthUserChanged(Client * sender);
 	void NotifyMessageOfTheDay(Client * sender);
 	void CheckAccess();
+	void SetSearch(std::string searchText);
 	virtual void OnTryOkay(OkayMethod method);
     SearchView();
 	virtual ~SearchView();

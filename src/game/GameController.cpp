@@ -526,9 +526,9 @@ bool GameController::MouseDown(int x, int y, unsigned button)
 bool GameController::MouseUp(int x, int y, unsigned button)
 {
 	bool ret = commandInterface->OnMouseUp(x, y, button);
-	if(ret && button == BUTTON_LEFT && y<YRES && x<XRES)
+	if(ret && y<YRES && x<XRES)
 	{
-		if (gameModel->GetActiveTool(0)->GetIdentifier() != "DEFAULT_UI_SIGN")//If it's not a sign tool
+		if (gameModel->GetActiveTool(0)->GetIdentifier() != "DEFAULT_UI_SIGN" || button != BUTTON_LEFT) //If it's not a sign tool or you are right/middle clicking
 		{
 			Simulation * sim = gameModel->GetSimulation();
 			for (std::vector<sign>::iterator iter = sim->signs.begin(), end = sim->signs.end(); iter != end; ++iter)
@@ -537,7 +537,7 @@ bool GameController::MouseUp(int x, int y, unsigned button)
 				(*iter).pos(signx, signy, signw, signh);
 				if (x>=signx && x<=signx+signw && y>=signy && y<=signy+signh)
 				{
-					if (sregexp((*iter).text.c_str(), "^{[c|t]:[0-9]*|.*}$")==0)
+					if (sregexp((*iter).text.c_str(), "^{[c|t]:[0-9]*|.*}$")==0 || sregexp((*iter).text.c_str(), "^{s:.*|.*}$")==0)
 					{
 						const char * signText = (*iter).text.c_str();
 						char buff[256];
@@ -550,16 +550,21 @@ bool GameController::MouseUp(int x, int y, unsigned button)
 
 						buff[sldr-3] = '\0';
 
-						int tempSaveID = format::StringToNumber<int>(std::string(buff));
-						if (tempSaveID)
+						if ((*iter).text.c_str()[1] == 's')
+							OpenSearch(buff);
+						else
 						{
-							if ((*iter).text.c_str()[1] == 'c')
-								OpenSavePreview(tempSaveID, 0);
-							else if ((*iter).text.c_str()[1] == 't')
+							int tempSaveID = format::StringToNumber<int>(std::string(buff));
+							if (tempSaveID)
 							{
-								char url[256];
-								sprintf(url, "http://powdertoy.co.uk/Discussions/Thread/View.html?Thread=%i", tempSaveID);
-								OpenURI(url);
+								if ((*iter).text.c_str()[1] == 'c')
+									OpenSavePreview(tempSaveID, 0);
+								else if ((*iter).text.c_str()[1] == 't')
+								{
+									char url[256];
+									sprintf(url, "http://powdertoy.co.uk/Discussions/Thread/View.html?Thread=%i", tempSaveID);
+									OpenURI(url);
+								}
 							}
 						}
 						break;
@@ -902,10 +907,12 @@ void GameController::SetActiveTool(int toolSelection, Tool * tool)
 	}	
 }
 
-void GameController::OpenSearch()
+void GameController::OpenSearch(std::string searchText)
 {
 	if(!search)
-		search = new SearchController(new SearchCallback(this));
+		search = new SearchController(new SearchCallback(this), searchText);
+	if (searchText.length())
+		search->SetSearch(searchText);
 	ui::Engine::Ref().ShowWindow(search->GetView());
 }
 

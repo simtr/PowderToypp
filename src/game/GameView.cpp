@@ -196,7 +196,7 @@ GameView::GameView():
 			if(v->CtrlBehaviour())
 				v->c->OpenLocalBrowse();
 			else
-				v->c->OpenSearch();
+				v->c->OpenSearch("");
 		}
 	};
 	
