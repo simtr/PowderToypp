@@ -932,9 +932,25 @@ void GameController::OpenLocalSaveWindow()
 	}
 	else
 	{
-		SaveFile tempSave("");
+		std::string filename = "";
+		if (gameModel->GetFile())
+			filename = gameModel->GetFile()->GetDisplayName();
+		SaveFile tempSave(filename);
 		tempSave.SetGameSave(gameSave);
-		new LocalSaveActivity(tempSave);
+
+		class LocalSaveCallback: public FileSavedCallback
+		{
+			GameController * c;
+		public:
+			LocalSaveCallback(GameController * _c): c(_c) {}
+			virtual  ~LocalSaveCallback() {};
+			virtual void FileSaved(SaveFile* file)
+			{
+				c->gameModel->SetSaveFile(file);
+			}
+		};
+
+		new LocalSaveActivity(tempSave, new LocalSaveCallback(this));
 	}
 }
 
@@ -1199,6 +1215,10 @@ void GameController::ReloadSim()
 	if(gameModel->GetSave() && gameModel->GetSave()->GetGameSave())
 	{
 		gameModel->SetSave(gameModel->GetSave());
+	}
+	else if(gameModel->GetFile() && gameModel->GetFile()->GetGameSave())
+	{
+		gameModel->SetSaveFile(gameModel->GetFile());
 	}
 }
 
