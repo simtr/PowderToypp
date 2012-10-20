@@ -240,7 +240,7 @@ void GameController::PlaceSave(ui::Point position)
 	if(gameModel->GetPlaceSave())
 	{
 		gameModel->GetSimulation()->Load(position.X, position.Y, gameModel->GetPlaceSave());
-		gameModel->SetPaused(gameModel->GetPaused());
+		gameModel->SetPaused(gameModel->GetPlaceSave()->paused | gameModel->GetPaused());
 	}
 }
 
@@ -920,12 +920,6 @@ void GameController::OpenLocalSaveWindow(bool asCurrent)
 {
 	Simulation * sim = gameModel->GetSimulation();
 	GameSave * gameSave = sim->Save();
-	gameSave->paused = gameModel->GetPaused();
-	gameSave->gravityMode = sim->gravityMode;
-	gameSave->airMode = sim->air->airMode;
-	gameSave->legacyEnable = sim->legacy_enable;
-	gameSave->waterEEnabled = sim->water_equal_test;
-	gameSave->gravityEnable = sim->grav->ngrav_enable;
 	if(!gameSave)
 	{
 		new ErrorMessage("Error", "Unable to build save.");
@@ -1098,12 +1092,6 @@ void GameController::OpenSaveWindow()
 	{
 		Simulation * sim = gameModel->GetSimulation();
 		GameSave * gameSave = sim->Save();
-		gameSave->paused = gameModel->GetPaused();
-		gameSave->gravityMode = sim->gravityMode;
-		gameSave->airMode = sim->air->airMode;
-		gameSave->legacyEnable = sim->legacy_enable;
-		gameSave->waterEEnabled = sim->water_equal_test;
-		gameSave->gravityEnable = sim->grav->ngrav_enable;
 		if(!gameSave)
 		{
 			new ErrorMessage("Error", "Unable to build save.");
@@ -1149,12 +1137,6 @@ void GameController::SaveAsCurrent()
 	{
 		Simulation * sim = gameModel->GetSimulation();
 		GameSave * gameSave = sim->Save();
-		gameSave->paused = gameModel->GetPaused();
-		gameSave->gravityMode = sim->gravityMode;
-		gameSave->airMode = sim->air->airMode;
-		gameSave->legacyEnable = sim->legacy_enable;
-		gameSave->waterEEnabled = sim->water_equal_test;
-		gameSave->gravityEnable = sim->grav->ngrav_enable;
 		if(!gameSave)
 		{
 			new ErrorMessage("Error", "Unable to build save.");

@@ -221,6 +221,13 @@ GameSave * Simulation::Save(int fullX, int fullY, int fullX2, int fullY2)
 		}
 	}
 
+	newSave->paused = sys_pause;
+	newSave->gravityMode = gravityMode;
+	newSave->airMode = air->airMode;
+	newSave->legacyEnable = legacy_enable;
+	newSave->waterEEnabled = water_equal_test;
+	newSave->gravityEnable = grav->ngrav_enable;
+
 	return newSave;
 }
 
