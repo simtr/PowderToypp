@@ -227,6 +227,7 @@ GameSave * Simulation::Save(int fullX, int fullY, int fullX2, int fullY2)
 	newSave->legacyEnable = legacy_enable;
 	newSave->waterEEnabled = water_equal_test;
 	newSave->gravityEnable = grav->ngrav_enable;
+	newSave->edgeMode = edgeMode;
 
 	return newSave;
 }
@@ -846,6 +847,8 @@ void Simulation::SetEdgeMode(int newEdgeMode)
 	switch(edgeMode)
 	{
 	case 0:
+	case 2:
+	case 3:
 		for(int i = 0; i<(XRES/CELL); i++)
 		{
 			bmap[0][i] = 0;
@@ -1937,6 +1940,7 @@ void Simulation::clear_sim(void)
 		air->Clear();
 	SetEdgeMode(edgeMode);
 }
+
 void Simulation::init_can_move()
 {
 	// can_move[moving type][type at destination]
@@ -2273,10 +2277,31 @@ int Simulation::try_move(int i, int x, int y, int nx, int ny)
 	return 1;
 }
 
+bool Simulation::OutOfBounds(int x, int y)
+{
+	if (edgeMode != 3)
+		return (x < CELL || x > XRES-CELL || y < CELL || y > YRES-CELL);
+	else
+		return (x < 0 || x > XRES || y < 0 || y > YRES);
+}
+
 // try to move particle, and if successful update pmap and parts[i].x,y
 int Simulation::do_move(int i, int x, int y, float nxf, float nyf)
 {
 	int nx = (int)(nxf+0.5f), ny = (int)(nyf+0.5f), result;
+	if (edgeMode == 2)
+	{
+		if (nx < CELL)
+			nxf += XRES-CELL*2;
+		if (nx >= XRES-CELL)
+			nxf -= XRES-CELL*2;
+		if (ny < CELL)
+			nyf += YRES-CELL*2;
+		if (ny >= YRES-CELL)
+			nyf -= YRES-CELL*2;
+		nx = (int)(nxf+0.5f);
+		ny = (int)(nyf+0.5f);
+	}
 	if (parts[i].type == PT_NONE)
 		return 0;
 	result = try_move(i, x, y, nx, ny);
@@ -2289,7 +2314,7 @@ int Simulation::do_move(int i, int x, int y, float nxf, float nyf)
 		{
 			if ((pmap[y][x]>>8)==i) pmap[y][x] = 0;
 			else if ((photons[y][x]>>8)==i) photons[y][x] = 0;
-			if (nx<CELL || nx>=XRES-CELL || ny<CELL || ny>=YRES-CELL)//kill_part if particle is out of bounds
+			if (OutOfBounds(nx, ny))//kill_part if particle is out of bounds
 			{
 				kill_part(i);
 				return -1;
@@ -3530,18 +3555,18 @@ void Simulation::update_particles_i(int start, int inc)
 			y = (int)(parts[i].y+0.5f);
 
 			//this kills any particle out of the screen, or in a wall where it isn't supposed to go
-			if (x<CELL || y<CELL || x>=XRES-CELL || y>=YRES-CELL ||
-			        (bmap[y/CELL][x/CELL] &&
-			         (bmap[y/CELL][x/CELL]==WL_WALL ||
-			          bmap[y/CELL][x/CELL]==WL_WALLELEC ||
-			          bmap[y/CELL][x/CELL]==WL_ALLOWAIR ||
-			          (bmap[y/CELL][x/CELL]==WL_DESTROYALL) ||
-			          (bmap[y/CELL][x/CELL]==WL_ALLOWLIQUID && elements[t].Falldown!=2) ||
-			          (bmap[y/CELL][x/CELL]==WL_ALLOWSOLID && elements[t].Falldown!=1) ||
-			          (bmap[y/CELL][x/CELL]==WL_ALLOWGAS && !(elements[t].Properties&TYPE_GAS)) || //&& elements[t].Falldown!=0 && parts[i].type!=PT_FIRE && parts[i].type!=PT_SMKE && parts[i].type!=PT_HFLM) ||
-			          (bmap[y/CELL][x/CELL]==WL_ALLOWENERGY && !(elements[t].Properties&TYPE_ENERGY)) ||
-					  (bmap[y/CELL][x/CELL]==WL_DETECT && (t==PT_METL || t==PT_SPRK)) ||
-			          (bmap[y/CELL][x/CELL]==WL_EWALL && !emap[y/CELL][x/CELL])) && (t!=PT_STKM) && (t!=PT_STKM2) && (t!=PT_FIGH)))
+			if (OutOfBounds(x, y) ||
+					(bmap[y/CELL][x/CELL] &&
+					(bmap[y/CELL][x/CELL]==WL_WALL ||
+					(bmap[y/CELL][x/CELL]==WL_WALLELEC) ||
+					(bmap[y/CELL][x/CELL]==WL_ALLOWAIR) ||
+					(bmap[y/CELL][x/CELL]==WL_DESTROYALL) ||
+					(bmap[y/CELL][x/CELL]==WL_ALLOWLIQUID && elements[t].Falldown!=2) ||
+					(bmap[y/CELL][x/CELL]==WL_ALLOWSOLID && elements[t].Falldown!=1) ||
+					(bmap[y/CELL][x/CELL]==WL_ALLOWGAS && !(elements[t].Properties&TYPE_GAS)) || //&& elements[t].Falldown!=0 && parts[i].type!=PT_FIRE && parts[i].type!=PT_SMKE && parts[i].type!=PT_HFLM) ||
+					(bmap[y/CELL][x/CELL]==WL_ALLOWENERGY && !(elements[t].Properties&TYPE_ENERGY)) ||
+					(bmap[y/CELL][x/CELL]==WL_DETECT && (t==PT_METL || t==PT_SPRK)) ||
+					(bmap[y/CELL][x/CELL]==WL_EWALL && !emap[y/CELL][x/CELL])) && (t!=PT_STKM) && (t!=PT_STKM2) && (t!=PT_FIGH)))
 			{
 				kill_part(i);
 				continue;
@@ -3635,13 +3660,24 @@ void Simulation::update_particles_i(int start, int inc)
 			j = surround_space = nt = 0;//if nt is greater than 1 after this, then there is a particle around the current particle, that is NOT the current particle's type, for water movement.
 			for (nx=-1; nx<2; nx++)
 				for (ny=-1; ny<2; ny++) {
-					if (nx||ny) {
-						surround[j] = r = pmap[y+ny][x+nx];
-						j++;
-						if (!(r&0xFF))
-							surround_space++;//there is empty space
-						if ((r&0xFF)!=t)
-							nt++;//there is nothing or a different particle
+					if (nx||ny)
+					{
+						if (!OutOfBounds(x+nx, y+ny))
+						{
+							surround[j] = r = pmap[y+ny][x+nx];
+							j++;
+							if (!(r&0xFF))
+								surround_space++;//there is empty space
+							if ((r&0xFF)!=t)
+								nt++;//there is nothing or a different particle
+						}
+						else
+						{
+							surround[j] = 0;
+							j++;
+							surround_space++;
+							nt++;
+						}
 					}
 				}
 
@@ -4082,6 +4118,19 @@ killed:
 					fin_yf += dy;
 					fin_x = (int)(fin_xf+0.5f);
 					fin_y = (int)(fin_yf+0.5f);
+					if (edgeMode == 2)
+					{
+						if (fin_x < CELL)
+							fin_xf += XRES-CELL*2;
+						if (fin_x >= XRES-CELL)
+							fin_xf -= XRES-CELL*2;
+						if (fin_y < CELL)
+							fin_yf += YRES-CELL*2;
+						if (fin_y >= YRES-CELL)
+							fin_yf -= YRES-CELL*2;
+						fin_x = (int)(fin_xf+0.5f);
+						fin_y = (int)(fin_yf+0.5f);
+					}
 					if (mv <= 0.0f)
 					{
 						// nothing found
@@ -4095,7 +4144,7 @@ killed:
 						clear_y = (int)(clear_yf+0.5f);
 						break;
 					}
-					if (fin_x<CELL || fin_y<CELL || fin_x>=XRES-CELL || fin_y>=YRES-CELL || pmap[fin_y][fin_x] || (bmap[fin_y/CELL][fin_x/CELL] && (bmap[fin_y/CELL][fin_x/CELL]==WL_DESTROYALL || !eval_move(t,fin_x,fin_y,NULL))))
+					if (OutOfBounds(fin_x, fin_y) || pmap[fin_y][fin_x] || (bmap[fin_y/CELL][fin_x/CELL] && (bmap[fin_y/CELL][fin_x/CELL]==WL_DESTROYALL || !eval_move(t,fin_x,fin_y,NULL))))
 					{
 						// found an obstacle
 						clear_xf = fin_xf-dx;
@@ -4124,7 +4173,7 @@ killed:
 				{
 					if ((pmap[y][x]>>8)==i) pmap[y][x] = 0;
 					else if ((photons[y][x]>>8)==i) photons[y][x] = 0;
-					if (nx<CELL || nx>=XRES-CELL || ny<CELL || ny>=YRES-CELL)
+					if (OutOfBounds(nx, ny))
 					{
 						kill_part(i);
 						continue;

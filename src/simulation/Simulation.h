@@ -167,6 +167,7 @@ public:
 	void clear_area(int area_x, int area_y, int area_w, int area_h);
 
 	void SetEdgeMode(int newEdgeMode);
+	bool OutOfBounds(int x, int y);
 
 	int Tool(int x, int y, int tool, float strength = 1.0f);
 	int ToolBrush(int x, int y, int tool, Brush * cBrush, float strength = 1.0f);
