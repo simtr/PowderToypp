@@ -1,5 +1,6 @@
 import os, sys, subprocess, time
 
+
 ##Fix for long command line - http://scons.org/wiki/LongCmdLinesOnWin32
 class ourSpawn:
 	def ourspawn(self, sh, escape, cmd, args, env):
@@ -135,6 +136,7 @@ if(GetOption('static')):
 if(GetOption('win')):
 	openGLLibs = ['opengl32', 'glew32']
 	env.Prepend(LIBS=['mingw32', 'ws2_32', 'SDLmain', 'regex'])
+	env.Append(CCFLAGS=['-std=gnu++98'])
 	env.Append(LIBS=['winmm', 'gdi32'])
 	env.Append(CPPDEFINES=["WIN"])
 	env.Append(LINKFLAGS=['-mwindows'])
