@@ -99,17 +99,21 @@ int main(int argc, char *argv[])
 	ren->RenderBegin();
 	ren->RenderEnd();
 
-	VideoBuffer screenBuffer = ren->DumpFrame();
+	VideoBuffer buf = ren->DumpFrame();
 	//ppmFile = format::VideoBufferToPPM(screenBuffer);
-	ptiFile = format::VideoBufferToPTI(screenBuffer);
-	pngFile = format::VideoBufferToPNG(screenBuffer);
-
-	screenBuffer.Resize(1.0f/3.0f, true);
-	ptiSmallFile = format::VideoBufferToPTI(screenBuffer);
-	pngSmallFile = format::VideoBufferToPNG(screenBuffer);
-
-
-
+	VideoBuffer small = new VideoBuffer(buf.Width/3,buf.Height/3);
+	ptiFile = format::VideoBufferToPTI(buf);
+	pngFile = format::VideoBufferToPNG(buf);
+	int i,j,x,y,k;
+	for(i=0;i<buf.Width;i++)
+		for(j=0;j<buf.Height;j++)
+			buf.Buffer[i+j*buf.Width]=(buf.Buffer[i+j*buf.Width]&0xFCFCFCFC)>>2;		
+	for(i=0;i<small.Width;i++)
+		for(j=0;j<small.Height;j++){
+			small.Buffer[i+j*small.Width]=buf.Buffer[(i*3+1)+(j*3)*buf.Width]+buf.Buffer[(i*3)+(j*3+1)*buf.Width]+buf.Buffer[(i*3+1)+(j*3+2)*buf.Width]+buf.Buffer[(i*3+2)+(j*3+1)*buf.Width];
+		}
+	ptiSmallFile = format::VideoBufferToPTI(small);
+	pngSmallFile = format::VideoBufferToPNG(small);
 	//writeFile(ppmFilename, ppmFile);
 	writeFile(ptiFilename, ptiFile);
 	writeFile(ptiSmallFilename, ptiSmallFile);
