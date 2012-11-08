@@ -186,34 +186,48 @@ TPT_INLINE void PIXELMETHODS_CLASS::addpixel(int x, int y, int r, int g, int b, 
 
 void PIXELMETHODS_CLASS::xor_line(int x1, int y1, int x2, int y2)
 {
-	if((x1==x2)&&(y1==y2))
-		xor_pixel(x1,y1);
-	else{
-		int nx1=x1;
-		int ny1=y1;
-		int nx2=x2;
-		int ny2=y2;
-		if(abs(x2-x1)>abs(y2-y1)){
-			if(x1>x2){
-				nx1=x2;
-				nx2=x1;
-				ny1=y2;
-				ny2=y1;
-			}
-			for(int x=nx1;x<=nx2;x++)
-				xor_pixel(x,((x-nx1)*(ny2-ny1))/(nx2-nx1)+ny1);
-		}else{
-			if(y1>y2){
-				nx1=x2;
-				nx2=x1;
-				ny1=y2;
-				ny2=y1;
-			}
-			for(int y=ny1;y<=ny2;y++) //
-				xor_pixel(((y-ny1)*(nx2-nx1))/(ny2-ny1)+nx1,y);
+	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
+	float e, de;
+	if (cp)
+	{
+		y = x1;
+		x1 = y1;
+		y1 = y;
+		y = x2;
+		x2 = y2;
+		y2 = y;
+	}
+	if (x1 > x2)
+	{
+		y = x1;
+		x1 = x2;
+		x2 = y;
+		y = y1;
+		y1 = y2;
+		y2 = y;
+	}
+	dx = x2 - x1;
+	dy = abs(y2 - y1);
+	e = 0.0f;
+	if (dx)
+		de = dy/(float)dx;
+	else
+		de = 0.0f;
+	y = y1;
+	sy = (y1<y2) ? 1 : -1;
+	for (x=x1; x<=x2; x++)
+	{
+		if (cp)
+			xor_pixel(y, x);
+		else
+			xor_pixel(x, y);
+		e += de;
+		if (e >= 0.5f)
+		{
+			y += sy;
+			e -= 1.0f;
 		}
 	}
-	
 }
 
 void PIXELMETHODS_CLASS::xor_rect(int x, int y, int w, int h)
